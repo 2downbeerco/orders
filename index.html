@@ -1,0 +1,2449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="2 Down Ops">
+<title>2 Down Brewery — Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #F5F6FA; --surface: #FFFFFF; --border: #E2E5EC;
+    --muted: #7A8394; --text: #1A1D23; --accent: #D4821A;
+    --accent-bg: #FFF4E6; --blue: #2563EB; --green: #16A34A;
+    --orange: #D4821A; --red: #DC2626; --hover: #F0F2F7;
+    --sidebar-bg: #1C2333; --sidebar-text: #C8CEDD; --sidebar-active: #F5A623;
+    --sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; font-size: 15px; }
+  button { cursor: pointer; font-family: var(--sans); border: none; outline: none; }
+  input, select, textarea { font-family: var(--sans); outline: none; }
+  select option { background: var(--surface); }
+
+  /* Layout */
+  #app { display: flex; height: 100vh; }
+  #sidebar { width: 230px; flex-shrink: 0; background: var(--sidebar-bg); display: flex; flex-direction: column; overflow: hidden; }
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  #topbar { padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  #content { flex: 1; overflow-y: auto; padding: 28px; }
+
+  /* Sidebar */
+  .sidebar-logo { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .logo-top { font-size: 20px; font-weight: 700; color: var(--sidebar-active); letter-spacing: 2px; line-height: 1; }
+  .logo-sub { font-size: 11px; color: rgba(200,206,221,0.5); letter-spacing: 3px; text-transform: uppercase; margin-top: 5px; }
+  .nav-items { padding: 14px 0; flex: 1; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--sidebar-text); border-left: 3px solid transparent; transition: all 0.15s; white-space: nowrap; }
+  .nav-item:hover { color: #fff; background: rgba(255,255,255,0.06); }
+  .nav-item.active { color: var(--sidebar-active); background: rgba(245,166,35,0.1); border-left-color: var(--sidebar-active); font-weight: 600; }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+  /* Mobile nav */
+  #mobile-nav { display: none; background: var(--sidebar-bg); border-top: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+  .mobile-nav-inner { display: flex; overflow-x: auto; padding: 6px 4px; gap: 2px; scrollbar-width: none; }
+  .mobile-nav-inner::-webkit-scrollbar { display: none; }
+  .mobile-nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--sidebar-text); white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+  .mobile-nav-item.active { color: var(--sidebar-active); background: rgba(245,166,35,0.15); }
+  .mobile-nav-item span:first-child { font-size: 20px; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 16px; }
+
+  /* Buttons */
+  .btn { padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.3px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn:hover { filter: brightness(0.94); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-ghost { background: var(--hover); color: var(--text); border: 1px solid var(--border); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+
+  /* Inputs */
+  .inp { background: var(--surface); border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 13px; color: var(--text); font-size: 14px; width: 100%; transition: border-color 0.15s; }
+  .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(212,130,26,0.12); }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; display: block; }
+
+  /* Grid */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+
+  /* Stat cards */
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .stat-num { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat-lbl { font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 6px; }
+
+  /* Table */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tbl th { text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--border); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; white-space: nowrap; background: var(--bg); }
+  .tbl td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; line-height: 1.5; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl tr:hover td { background: var(--hover); }
+  .tbl-wrap { overflow-x: auto; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+
+  /* Form row */
+  .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 12px; }
+
+  /* Info box */
+  .info-box { background: var(--accent-bg); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--text); line-height: 1.8; margin-top: 12px; border: 1px solid rgba(212,130,26,0.2); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+  .modal-box { background: #fff; color: #000; border-radius: 12px; padding: 32px; width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+
+  /* Topbar */
+  .topbar-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .topbar-date { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+  /* Empty state */
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 40px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #000; }
+    .no-print { display: none !important; }
+  }
+
+  /* Mobile responsive */
+  @media (max-width: 700px) {
+    .hide-mobile { display: none !important; }
+    .mobile-only { display: flex !important; }
+    #mobile-nav { display: none; }
+    #app { height: 100vh; height: 100dvh; overflow: hidden; }
+    #content { flex: 1; overflow-y: auto; padding: 14px; }
+    #sidebar { display: flex; flex-direction: column; width: 200px; position: fixed; left: -200px; top: 0; bottom: 0; z-index: 200; transition: left 0.25s ease; box-shadow: 4px 0 20px rgba(0,0,0,0.18); }
+    #sidebar.open { left: 0; }
+    #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 199; }
+    #sidebar-overlay.open { display: block; }
+    #menu-btn { display: flex; }
+    #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .grid4 { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr 1fr; }
+    .form-row > *:nth-child(3) { grid-column: 1; }
+    .form-row > *:nth-child(4) { grid-column: 2; }
+    .topbar-date { display: none; }
+    .tbl-wrap { font-size: 13px; }
+    .sticky-col { position: sticky; left: 0; background: var(--surface); z-index: 2; box-shadow: 2px 0 6px rgba(0,0,0,0.07); }
+    .tbl th.sticky-col { background: var(--bg); }
+  }
+  @media (min-width: 701px) {
+    .mobile-only { display: none !important; }
+    #menu-btn { display: none !important; }
+    #sidebar-overlay { display: none !important; }
+  }
+  @media (max-width: 480px) {
+    .stat-num { font-size: 26px; }
+    .grid4 { grid-template-columns: repeat(2,1fr); gap: 10px; }
+  }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: #fff; padding: 11px 22px; border-radius: 8px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity 0.3s; z-index: 2000; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="sidebar-overlay" onclick="closeMobileNav()"></div>
+<div id="app">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-top">2 DOWN</div>
+      <div class="logo-sub">Brewery · Ops</div>
+    </div>
+    <div class="nav-items" id="nav-items"></div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button id="menu-btn" onclick="toggleMobileNav()" style="background:none;border:none;cursor:pointer;padding:4px 8px;color:var(--text);font-size:24px;line-height:1">☰</button>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <span id="sync-status" style="font-size:12px;font-weight:500;transition:color 0.3s"></span>
+        <div class="topbar-date" id="topbar-date"></div>
+      </div>
+    </div>
+    <div id="content"></div>
+    <!-- Mobile nav (kept for potential future use, hidden) -->
+    <div id="mobile-nav" style="display:none">
+      <div class="mobile-nav-inner" id="mobile-nav-items"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal container -->
+<div id="modal-container"></div>
+<!-- Toast -->
+<div id="toast">✓ SAVED</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────
+const BARS = [
+  {id:1,barName:"Woodside Inn Colaba",entity:"Woodside Inn (Woodside Inn Colaba)",area:"Colaba",licNo:"161",licType:"FL3"},
+  {id:2,barName:"Woodside Inn Bandra",entity:"Jenis Roshan (Woodside Inn Bandra)",area:"Bandra West",licNo:"1282",licType:"FL3"},
+  {id:3,barName:"Woodside Inn Oshiwara",entity:"Hotel Royal Fantasy (Woodside Inn Oshiwara)",area:"Jogeshwari West",licNo:"948",licType:"FL3"},
+  {id:4,barName:"Bonobo",entity:"Iris Hospitality (Bonobo)",area:"Bandra West",licNo:"1446",licType:"FL3"},
+  {id:5,barName:"Foo Andheri",entity:"Shree Balajee Landmark Hotels (Foo Andheri)",area:"Andheri West",licNo:"1599",licType:"FL3"},
+  {id:6,barName:"Foo Bandra",entity:"Luvish Green Acres (Foo Bandra)",area:"Bandra West",licNo:"2016",licType:"FL3"},
+  {id:7,barName:"Foo BKC",entity:"Ryke Hospitality (Foo BKC)",area:"Bandra East",licNo:"2354",licType:"FL3"},
+  {id:8,barName:"Foo Town",entity:"Kamling Chinese Restaurant (Foo Town)",area:"Churchgate",licNo:"943",licType:"FL3"},
+  {id:9,barName:"Plural",entity:"Amor Fati (Plural)",area:"Kala Ghoda",licNo:"959",licType:"FL3"},
+  {id:10,barName:"Sammy Sosa Oshiwara",entity:"Samvirat Properties (Sammy Sosa Oshiwara)",area:"Andheri West",licNo:"1450",licType:"FL3"},
+  {id:11,barName:"Sammy Sosa Malad",entity:"Samvirat Properties (Sammy Sosa Malad)",area:"Malad",licNo:"2185",licType:"FL3"},
+  {id:12,barName:"Someplace Else BKC",entity:"Apeejay Surrendra Park Hotels (Someplace Else BKC)",area:"Bandra East",licNo:"2336",licType:"FL3"},
+  {id:13,barName:"The Bombay Canteen",entity:"Hunger Inc (The Bombay Canteen)",area:"Lower Parel",licNo:"803",licType:"FL3"},
+  {id:14,barName:"Foo Powai",entity:"RYKE HOSPITALITY PRIVATE LIMITED (Foo Powai)",area:"Powai",licNo:"2400",licType:"FL3"},
+  {id:15,barName:"Sesami",entity:"Lakeview Developers (Sesami)",area:"Powai",licNo:"1354",licType:"FL3"},
+  {id:16,barName:"Foo NESCO",entity:"NESCO Limited Restaurant (Foo NESCO)",area:"Goregaon East",licNo:"2379",licType:"FL3"},
+  {id:17,barName:"Boss BBQ",entity:"Impresario Entertainment and Hospitality (Boss BBQ)",area:"Vikhroli",licNo:"2067",licType:"FL3"},
+  {id:18,barName:"Kyma BKC",entity:"Shiv Sagar Foods and Resorts Pvt Ltd (Kyma BKC)",area:"Bandra East",licNo:"2333",licType:"FL3"},
+  {id:19,barName:"Butterfly High Lower Parel",entity:"Shiv Sagar Foods and Resorts Pvt Ltd (Butterfly High Lower Parel)",area:"Lower Parel",licNo:"1004",licType:"FL3"},
+  {id:20,barName:"Butterfly High Oshiwara",entity:"Shiv Sagar Foods and Resorts Pvt Ltd (Butterfly High Oshiwara)",area:"Goregaon West",licNo:"2472",licType:"FL3"},
+  {id:21,barName:"Butterfly High Vikhroli",entity:"Shiv Sagar Foods and Resorts Pvt Ltd (Butterfly High Vikhroli)",area:"Vikhroli",licNo:"2489",licType:"FL3"},
+  {id:22,barName:"Mastermind Bicycle Cafe",entity:"Mastermind Bicycle Cafe",area:"Mulund",licNo:"2414",licType:"FL3"},
+  {id:23,barName:"Leaping Windows",entity:"Leaping Windows",area:"Versova",licNo:"2123",licType:"FL3"},
+  {id:24,barName:"Juliette",entity:"Time and Again Restaurant (Juliette)",area:"Andheri West",licNo:"1113",licType:"FL3"},
+  {id:25,barName:"Magna",entity:"Hotel Masaledar (Magna)",area:"Thane",licNo:"2247",licType:"FL3"},
+  {id:26,barName:"Eddies",entity:"Eddies Hospitality Pvt Ltd (Eddies)",area:"Bandra West",licNo:"1836",licType:"FL3"},
+  {id:27,barName:"BBC Goregaon",entity:"KVC INC (BBC Goregaon)",area:"Goregaon",licNo:"1739",licType:"FL3"},
+  {id:28,barName:"The Club",entity:"Khanna Hotels Private Limited (The Club)",area:"D N Nagar",licNo:"935",licType:"FL3"},
+  {id:29,barName:"Brew Whale Khar",entity:"Brew Whale Khar",area:"Khar",licNo:"",licType:"FL3"},
+  {id:30,barName:"Seasons Wine",entity:"Seasons Wine Project by Liquid Library",area:"Versova",licNo:"555",licType:"FLBR2"},
+  {id:31,barName:"The Berliner Bar",entity:"Midas Touch The Berliner (The Berliner Bar)",area:"Andheri West",licNo:"2315",licType:"FL3"},
+  {id:32,barName:"PF Chang's Lower Parel",entity:"GOURMET INVESTMENTS PVT LTD (PF Chang's Lower Parel)",area:"Lower Parel",licNo:"1025",licType:"FL3"},
+  {id:33,barName:"Malvan Tadka",entity:"Bread and Barrel Restaurants (Malvan Tadka)",area:"Thane",licNo:"2336",licType:"FL3"},
+  {id:34,barName:"Captain's Brew",entity:"DEW FRRESH PRIVATE LIMITED (Captain's Brew)",area:"Thane",licNo:"2758",licType:"FL3"},
+  {id:35,barName:"Taftoon BKC",entity:"Flavour Pots Foods LLP (Taftoon BKC)",area:"Bandra East",licNo:"2080",licType:"FL3"},
+  {id:36,barName:"Foo Thane",entity:"Pebble Street Hospitality Pvt Ltd (Foo Thane)",area:"Thane",licNo:"2750",licType:"FL3"},
+  {id:37,barName:"The Den",entity:"The Den (The Den)",area:"Khar West",licNo:"1834",licType:"FL3"},
+  {id:38,barName:"Loco Otro",entity:"Siddharth Ramesh Mahadik (Loco Otro)",area:"Aundh",licNo:"3197",licType:"FL3"},
+  {id:39,barName:"Ricky's",entity:"Rickys Bar and Kitchen (Ricky's)",area:"Thane",licNo:"2539",licType:"FL3"},
+  {id:40,barName:"The Irish House Lower Parel",entity:"The Irish House Food & Brew Pvt Ltd",area:"Lower Parel",licNo:"747",licType:"FL3"},
+  {id:41,barName:"PF Chang's Khar West",entity:"GOURMET INVESTMENTS PVT LTD (PF Chang's Khar West)",area:"Khar West",licNo:"2178",licType:"FL3"},
+  {id:42,barName:"Nebo",entity:"Shrishti Restaurant Hospitality (Nebo)",area:"Andheri East",licNo:"2585",licType:"FL3"},
+  {id:43,barName:"The Corner Room",entity:"Buesoco Enterprise Private Limited (The Corrner Room)",area:"Khar West",licNo:"2587",licType:"FL3"},
+  {id:44,barName:"Bonfire",entity:"Bonfire Hospitality (Bonfire)",area:"Versova",licNo:"2491",licType:"FL3"},
+  {id:45,barName:"Block 108",entity:"Brick and Mortar Restaurants LLP (Block 108)",area:"Thane",licNo:"2816",licType:"FL3"},
+  {id:46,barName:"Kissa",entity:"Buesoco Enterprise Private Limited (Kissa)",area:"Andheri West",licNo:"2456",licType:"FL3"},
+  {id:47,barName:"Kico",entity:"Time and Again Restaurant (Kico)",area:"Andheri West",licNo:"1113",licType:"FL3"},
+  {id:48,barName:"Chug Biergarten",entity:"Hotel Vvibe Vveranda (Chug)",area:"Baner",licNo:"1318",licType:"FL3"},
+  {id:49,barName:"Hops Versova",entity:"Kettle and Keg LLP (Hops Versova)",area:"Versova",licNo:"2290",licType:"FL3"},
+  {id:50,barName:"Barley",entity:"The Little Bao (Barley)",area:"Malad West",licNo:"2292",licType:"FL3"},
+  {id:51,barName:"PF Chang's Andheri West",entity:"GOURMET INVESTMENTS PVT LTD (PF Chang's Andheri West)",area:"Andheri West",licNo:"2424",licType:"FL3"},
+  {id:52,barName:"Queens",entity:"Queens Brewing Company",area:"Thane",licNo:"2871",licType:"Form E"},
+  {id:53,barName:"Pivo Garten",entity:"Pivovar Biz LLP (Pivo Garten)",area:"Mundhwa",licNo:"2882",licType:"FL3"},
+  {id:54,barName:"Sammy Sosa Belapur",entity:"Hotel Ventura Foodworks and Hospitality (Sammy Sosa Belapur)",area:"CBD Belapur",licNo:"2305",licType:"FL3"},
+  {id:55,barName:"SAZ BKC",entity:"Pass Code Hospitality Pvt Ltd (SAZ BKC)",area:"Bandra East",licNo:"2359",licType:"FL3"},
+  {id:56,barName:"Third Place",entity:"Grandeur Hotels Pvt Ltd (Third Place)",area:"Pune",licNo:"1415",licType:"FL3"},
+  {id:57,barName:"Chapter",entity:"Reeva Hospitality Ava (Chapter)",area:"CBD Belapur",licNo:"2910",licType:"FL3"},
+  {id:58,barName:"Border Bean",entity:"Border Bean Barbecue",area:"Lower Parel",licNo:"1070",licType:"FL3"},
+  {id:59,barName:"The Bierhaus",entity:"Apollo 24 LLP (The Bierhaus)",area:"Hinjewadi",licNo:"3879",licType:"FL3"},
+  {id:60,barName:"8ish",entity:"Indian Express Commercial Ventures (8ish)",area:"Nariman Point",licNo:"775",licType:"FL3"},
+  {id:61,barName:"Berlin Brew The Beer Library",entity:"Bombay Cocktail Bar (Berlin Brew)",area:"Andheri West",licNo:"2327",licType:"FL3"},
+  {id:62,barName:"Hops Malad",entity:"Hotel Garden View (Hops Malad)",area:"Goregaon West",licNo:"515",licType:"FL3"},
+  {id:63,barName:"Patel Provision Stores",entity:"Patel Provision Stores",area:"Bandra West",licNo:"666",licType:"FLBR2"},
+  {id:64,barName:"Ouza",entity:"The Tavern (Ouza)",area:"Pune",licNo:"2979",licType:"FL3"},
+  {id:65,barName:"Sthamba Andheri",entity:"Sthamba Cafe and Brewery",area:"Andheri West",licNo:"2621",licType:"FL3"},
+  {id:66,barName:"Flint",entity:"ADITYA BIRLA NEW AGE RESTAURANTS (Flint)",area:"Nariman Point",licNo:"1036",licType:"FL3"},
+  {id:67,barName:"PF Chang's Borivali",entity:"GOURMET INVESTMENTS PVT LTD (PF Chang's Borivali)",area:"Borivali",licNo:"2732",licType:"FL3"},
+  {id:68,barName:"Kerala Quarters",entity:"Inkytales Hospitality LLP (Kerala Quarters)",area:"Lower Parel",licNo:"1011",licType:"FL3"},
+  {id:69,barName:"BNTR",entity:"Boteco Restaurant Pvt. Ltd. (BNTR)",area:"Pune",licNo:"1748",licType:"FL3"},
+  {id:70,barName:"Papi",entity:"Kiran Enterprises Burling Tons (Papi)",area:"Khar West",licNo:"2367",licType:"FL3"},
+  {id:71,barName:"Downpour Baner",entity:"Downpour",area:"Baner",licNo:"1076",licType:"FLBR2"},
+  {id:72,barName:"Kyma KP",entity:"Kyma Restaurant of Shiv Sagar Foods (Kyma KP)",area:"Mundhwa",licNo:"3453",licType:"FL3"},
+  {id:73,barName:"We Idliwale Barroom",entity:"Medium Raw Hospitality Pvt Ltd",area:"Balewadi",licNo:"3433",licType:"FL3"},
+  {id:74,barName:"Sammy Sosa Malad",entity:"Samvirat Properties (Sammy Sosa Malad)",area:"Malad",licNo:"2185",licType:"FL3"},
+  {id:75,barName:"The Irish House Andheri",entity:"The Irish House Food & Brew Pvt Ltd",area:"Andheri West",licNo:"",licType:"FL3"},
+];
+
+const BEERS_SEED = [
+  {code:"BB", name:"Basil Blonde",   color:"#F5C842"},
+  {code:"GR", name:"Gold Rush",      color:"#A3C96B"},
+  {code:"MP", name:"Missing Piece",  color:"#E87C3E"},
+  {code:"DC", name:"Daddy Cool",     color:"#A07060"},
+  {code:"OW", name:"Other Weiss",    color:"#58A6FF"},
+];
+// Keep BEERS as alias for compatibility
+let BEERS = [...BEERS_SEED];
+
+
+// ── Keg Data ──────────────────────────────────────────────────────────────
+const KEG_SEED = [{"size": 20, "make": "Micromatic", "kegNo": "M1", "location": "The Bierhaus", "beer": "OW3", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M2", "location": "8ish", "beer": "MP39", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M3", "location": "Butterfly High Vikhroli", "beer": "MP40", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M4", "location": "Patel Provision Stores", "beer": "BB50", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "M5", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M6", "location": "PF Chang's Borivali", "beer": "BB49", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M7", "location": "BBC Andheri", "beer": "DC4", "missing": true}, {"size": 20, "make": "Micromatic", "kegNo": "M8", "location": "Butterfly High Oshiwara", "beer": "BB49", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M9", "location": "Woodside Inn Bandra", "beer": "GR12", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M10", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M11", "location": "Hops Versova", "beer": "MP39", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M12", "location": "Woodside Inn Bandra", "beer": "BB50", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M13", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M14", "location": "BNTR", "beer": "MP40", "missing": false}, {"size": 20, "make": "Micromatic", "kegNo": "M15", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-1", "location": "Berlin Brew The Beer Library", "beer": "BB48", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-2", "location": "BBC Andheri", "beer": "DC3", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-3", "location": "Taftoon BKC", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-4", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-5", "location": "Bonobo", "beer": "BB41", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-6", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-7", "location": "Sammy Sosa Oshiwara", "beer": "BB49", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-8", "location": "Sammy Sosa Belapur", "beer": "MP38", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-9", "location": "The Den", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-10", "location": "BBC Andheri", "beer": "DC3", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-11", "location": "Taftoon BKC", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-12", "location": "Woodside Inn Bandra", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-13", "location": "BNTR", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-14", "location": "BNTR", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-15", "location": "BBC Goregaon", "beer": "BB20", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-16", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-17", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-18", "location": "Woodside Inn Bandra", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-19", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-20", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-21", "location": "Queens", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-22", "location": "Ricky's", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-23", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-24", "location": "PF Chang's Andheri West", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-25", "location": "Eddies", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-26", "location": "The Bombay Canteen", "beer": "DC1", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-27", "location": "Woodside Inn Oshiwara", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-28", "location": "Sammy Sosa Belapur", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-29", "location": "BBC Lower Parel", "beer": "DC3", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-30", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-31", "location": "Bonobo", "beer": "DC4", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-32", "location": "Flint", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-33", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-34", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-35", "location": "PF Chang's Khar West", "beer": "BB48", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-36", "location": "PF Chang's Borivali", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-37", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-38", "location": "Eddies", "beer": "SS1", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-39", "location": "Border Bean Barbecue", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-40", "location": "Mastermind Bicycle Cafe", "beer": "BB48", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-41", "location": "Flint", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-42", "location": "BNTR", "beer": "MP40", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-43", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-44", "location": "Someplace Else BKC", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-45", "location": "PF Chang's Borivali", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-46", "location": "BNTR", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-47", "location": "Sthamba", "beer": "BB49", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-48", "location": "The Berliner Bar", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-49", "location": "Ouza", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-50", "location": "The Bierhaus", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-51", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-52", "location": "Mastermind Bicycle Cafe", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-53", "location": "Butterfly High Oshiwara", "beer": "MP36", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-54", "location": "Patel Provision Stores", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-55", "location": "BBC Andheri", "beer": "DM26", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-56", "location": "BBC Goregaon", "beer": "MP1", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-57", "location": "BBC Goregaon", "beer": "MP8", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-58", "location": "Kyma KP", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-59", "location": "The Bierhaus", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C1-60", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-61", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-62", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-63", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-64", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-65", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-66", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-67", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-68", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-69", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-70", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-71", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-72", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C1-73", "location": "Brewery", "beer": "Empty", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C2-1", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-2", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-3", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-4", "location": "Someplace Else BKC", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-5", "location": "BNTR", "beer": "MP40", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-6", "location": "Hops Versova", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-7", "location": "PF Chang's Lower Parel", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-8", "location": "Woodside Inn Colaba", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-9", "location": "Patel Provision Stores", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-10", "location": "BBC Goregaon", "beer": "DM31", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C2-11", "location": "Eddies", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-12", "location": "Leaping Windows", "beer": "GR9", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-13", "location": "Kerala Quarters", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-14", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-15", "location": "BBC Goregaon", "beer": "BB27", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C2-16", "location": "PF Chang's Borivali", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-17", "location": "PF Chang's Khar West", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-18", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-19", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-20", "location": "Hops Versova", "beer": "MP38", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-21", "location": "PF Chang's Andheri West", "beer": "BB49", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-22", "location": "Sammy Sosa Oshiwara", "beer": "DC22", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-23", "location": "Kyma BKC", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-24", "location": "BNTR", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-25", "location": "PF Chang's Lower Parel", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-26", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-27", "location": "PF Chang's Andheri West", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-28", "location": "Bonobo", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-29", "location": "Border Bean Barbecue", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-30", "location": "8ish", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-31", "location": "Chapter", "beer": "GR11", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-32", "location": "The Berliner Bar", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-33", "location": "Kyma KP", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-34", "location": "SAZ BKC", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-35", "location": "Sammy Sosa Oshiwara", "beer": "MP37", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-36", "location": "PF Chang's Andheri West", "beer": "MP37", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-37", "location": "PF Chang's Lower Parel", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-38", "location": "PF Chang's Borivali", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-39", "location": "Woodside Inn Bandra", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-40", "location": "Sammy Sosa Oshiwara", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-41", "location": "The Den", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-42", "location": "BBC Goregaon", "beer": "IPA5", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C2-43", "location": "Ricky's", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-44", "location": "BBC Goregaon", "beer": "PP13", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C2-45", "location": "8ish", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-46", "location": "Block 108", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-47", "location": "BNTR", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-48", "location": "Berlin Brew The Beer Library", "beer": "BB48", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-49", "location": "Border Bean Barbecue", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-50", "location": "Malvan Tadka", "beer": "MP37", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-51", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-52", "location": "Bonobo", "beer": "DC7", "missing": true}, {"size": 20, "make": "Cubic", "kegNo": "20C2-53", "location": "Malvan Tadka", "beer": "MP40", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-54", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-55", "location": "Event", "beer": "IPA", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-56", "location": "Butterfly High Oshiwara", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-57", "location": "Patel Provision Stores", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-58", "location": "PF Chang's Lower Parel", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-59", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-60", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-61", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-62", "location": "Woodside Inn Bandra", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-63", "location": "PF Chang's Andheri West", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-64", "location": "SAZ BKC", "beer": "BB50", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-65", "location": "Patel Provision Stores", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-66", "location": "Woodside Inn Colaba", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-67", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-68", "location": "Hops Malad", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-69", "location": "PF Chang's Lower Parel", "beer": "MP38", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C2-70", "location": "Taftoon BKC", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-1", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-2", "location": "The Den", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-3", "location": "PF Chang's Khar West", "beer": "BB49", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-4", "location": "Eddies", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-5", "location": "Sthamba", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-6", "location": "Ricky's", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-7", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-8", "location": "Nebo", "beer": "GR11", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-9", "location": "Hops Malad", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-10", "location": "Kyma KP", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-11", "location": "Woodside Inn Oshiwara", "beer": "GR11", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-12", "location": "Ricky's", "beer": "MP38", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-13", "location": "Kyma BKC", "beer": "DC24", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-14", "location": "The Bierhaus", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-15", "location": "8ish", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-16", "location": "8ish", "beer": "DC23", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-17", "location": "Sammy Sosa Oshiwara", "beer": "MP39", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-18", "location": "The Bombay Canteen", "beer": "GR12", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-19", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20C3-20", "location": "Kyma KP", "beer": "MP39", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-1", "location": "Chapter", "beer": "GR11", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-2", "location": "BNTR", "beer": "MP40", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-3", "location": "Bonobo", "beer": "MP39", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-4", "location": "Border Bean Barbecue", "beer": "GR12", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-5", "location": "Block 108", "beer": "OW2", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-6", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-7", "location": "Queens", "beer": "GR12", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-8", "location": "Hops Malad", "beer": "MP39", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-9", "location": "Woodside Inn Oshiwara", "beer": "BB49", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-10", "location": "Patel Provision Stores", "beer": "OW3", "missing": false}, {"size": 20, "make": "Cubic", "kegNo": "20D1-11", "location": "Woodside Inn Bandra", "beer": "OW3", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-12", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-13", "location": "Flint", "beer": "DC23", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-14", "location": "PF Chang's Khar West", "beer": "DC23", "missing": false}, {"size": 20, "make": "Drifters", "kegNo": "20D1-15", "location": "The Berliner Bar", "beer": "GR12", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-1", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-2", "location": "Patel Provision Stores", "beer": "BB49", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-3", "location": "Kerala Quarters", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-4", "location": "Bonfire", "beer": "MP38", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-5", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-6", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-7", "location": "PF Chang's Andheri West", "beer": "DC22", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-8", "location": "Woodside Inn Colaba", "beer": "OW3", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-9", "location": "Border Bean Barbecue", "beer": "GR12", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-10", "location": "Downpour Baner", "beer": "MP18", "missing": true}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-11", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-12", "location": "PF Chang's Khar West", "beer": "MP38", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-13", "location": "PF Chang's Borivali", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-14", "location": "PF Chang's Lower Parel", "beer": "BB48", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-15", "location": "Bonfire", "beer": "GR11", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-16", "location": "Hops Malad", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-17", "location": "Sammy Sosa Belapur", "beer": "BB50", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-18", "location": "Kyma BKC", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-19", "location": "Sammy Sosa Belapur", "beer": "OW3", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B1-20", "location": "Butterfly High Oshiwara", "beer": "MP39", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-1", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-2", "location": "Kerala Quarters", "beer": "MP39", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-3", "location": "Someplace Else BKC", "beer": "DC23", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-4", "location": "Ouza", "beer": "OW3", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-5", "location": "The Bombay Canteen", "beer": "GR12", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-6", "location": "Butterfly High Vikhroli", "beer": "MP40", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-7", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Lost River", "kegNo": "20L-8", "location": "Malvan Tadka", "beer": "BB50", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-1", "location": "Sammy Sosa Oshiwara", "beer": "BB50", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-2", "location": "Patel Provision Stores", "beer": "MP39", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-3", "location": "Taftoon BKC", "beer": "BB50", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-4", "location": "PF Chang's Khar West", "beer": "DC24", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-5", "location": "Flint", "beer": "DC24", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-6", "location": "Border Bean Barbecue", "beer": "MP39", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-7", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-8", "location": "Butterfly High Vikhroli", "beer": "BB50", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-9", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Jagdish", "kegNo": "20J1-10", "location": "Woodside Inn Oshiwara", "beer": "GR12", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-1", "location": "Kerala Quarters", "beer": "OW3", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-2", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-3", "location": "BNTR", "beer": "DC24", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-4", "location": "PF Chang's Borivali", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-5", "location": "Someplace Else BKC", "beer": "DC24", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-6", "location": "Kyma BKC", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-7", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-8", "location": "Patel Provision Stores", "beer": "MP38", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-9", "location": "Ricky's", "beer": "DC24", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-10", "location": "The Bombay Canteen", "beer": "GR12", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-11", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-12", "location": "BNTR", "beer": "MP39", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-13", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-14", "location": "Berlin Brew The Beer Library", "beer": "BB48", "missing": false}, {"size": 20, "make": "Brew Driver", "kegNo": "20B2-15", "location": "Butterfly High Vikhroli", "beer": "BB50", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C1", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C2", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C3", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C4", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C5", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C6", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C7", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C8", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C9", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C10", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C11", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C12", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C13", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C14", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C15", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C16", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C17", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C18", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C19", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Cubic", "kegNo": "50C20", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K1", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K2", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K3", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K4", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K5", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K6", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K7", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K8", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K9", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K10", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K11", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K12", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K13", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K14", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K15", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K16", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K17", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K18", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K19", "location": "Brewery", "beer": "Empty", "missing": false}, {"size": 50, "make": "Kegwerks", "kegNo": "50K20", "location": "Brewery", "beer": "Empty", "missing": false}];
+
+// ── Storage — Supabase ────────────────────────────────────────────────────
+const SB_URL = 'https://wznilnuaatmlqgfankno.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bmlsbnVhYXRtbHFnZmFua25vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NjMzODUsImV4cCI6MjA5MjQzOTM4NX0.CP15u0zCIM6o27hvMvWAuSYFdzdFBefccNPPvFXwIwQ';
+const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+
+let orders = [];
+let bars = [...BARS];
+let kegs = [];
+
+function setSyncStatus(msg, color) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color || '#7A8394';
+}
+
+async function sbGet(table) {
+  const res = await fetch(`${SB_URL}/rest/v1/${table}?select=id,data`, { headers: SB_HDR });
+  if (!res.ok) throw new Error(await res.text());
+  const rows = await res.json();
+  return rows.map(r => r.data);
+}
+
+async function sbUpsert(table, id, data) {
+  const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id, data, updated_at: new Date().toISOString() })
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase upsert error (${table}):`, res.status, errText);
+    throw new Error(errText);
+  }
+}
+
+async function loadData() {
+  try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
+  try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
+  try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
+  try { const bb = localStorage.getItem('2down_brewery_beers'); if (bb) breweryBeers = JSON.parse(bb); } catch(_){}
+  try { const kh = localStorage.getItem('2down_keg_history'); if (kh) kegHistory = JSON.parse(kh); } catch(_){}
+  try { const bl = localStorage.getItem('2down_beers_v1'); if (bl) BEERS = JSON.parse(bl); } catch(_){}
+  try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
+  try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
+  renderNav(); renderPage();
+
+  setSyncStatus('Syncing...', '#D4821A');
+  try {
+    const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([sbGet('orders'), sbGet('bars'), sbGet('kegs')]);
+
+    if (remoteOrders.length > 0) {
+      orders = remoteOrders;
+      localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
+    } else if (orders.length > 0) {
+      const validOrders = orders.filter(o => o && o.id != null && o.id !== '');
+      await Promise.all(validOrders.map(o => sbUpsert('orders', String(o.id), o)));
+    }
+
+    if (remoteBars.length > 0) {
+      bars = remoteBars;
+      localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
+    } else if (bars.length > 0) {
+      await Promise.all(bars.map(b => sbUpsert('bars', String(b.id), b)));
+    }
+
+    // Separate special rows from keg rows
+    const bbRow   = remoteKegs.find(k => k && k.breweryBeers);
+    const khRow   = remoteKegs.find(k => k && k.kegHistory);
+    const blRow   = remoteKegs.find(k => k && k.beers);
+    const rcRow   = remoteKegs.find(k => k && k.rateCard);
+    const invRow  = remoteKegs.find(k => k && k.invData);
+    const kegRows = remoteKegs.filter(k => k && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData);
+
+    if (bbRow)  { breweryBeers = bbRow.breweryBeers;  localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers)); }
+    if (khRow)  { kegHistory   = khRow.kegHistory;    localStorage.setItem('2down_keg_history',   JSON.stringify(kegHistory)); }
+    if (blRow)  { BEERS        = blRow.beers;          localStorage.setItem('2down_beers_v1',      JSON.stringify(BEERS)); }
+    if (rcRow)  { rateCard     = rcRow.rateCard;       localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
+    if (invRow) { invData      = invRow.invData;       localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
+
+    if (kegRows.length > 0) {
+      kegs = kegRows;
+      localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+    } else {
+      kegs = [...KEG_SEED];
+      localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+      await Promise.all(kegs.map(k => sbUpsert('kegs', k.kegNo, k)));
+    }
+
+    setSyncStatus('Live', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 2000);
+    renderPage();
+  } catch(e) {
+    console.error('Supabase error:', e);
+    setSyncStatus('Offline', '#DC2626');
+  }
+}
+
+async function saveOrders() {
+  // Clean up any orders missing an id before saving
+  orders = orders.filter(o => o && o.id != null && o.id !== '');
+  localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
+  showToast();
+  try {
+    await Promise.all(orders.map(o => sbUpsert('orders', String(o.id), o)));
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+}
+
+async function saveBars() {
+  localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
+  showToast();
+  try {
+    await Promise.all(bars.map(b => sbUpsert('bars', String(b.id), b)));
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+}
+
+async function saveKegs() {
+  localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+  try {
+    await Promise.all(kegs.map(k => sbUpsert('kegs', k.kegNo, k)));
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+}
+
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// Strip trailing bracketed text from entity names e.g. "Iris Hospitality (Bonobo)" -> "Iris Hospitality"
+function cleanEntity(e) { return (e||'').replace(/\s*\(.*?\)\s*$/, '').trim(); }
+
+// ── Utils ─────────────────────────────────────────────────────────────────
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function today() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(d) {
+  if (!d) return '--';
+  return new Date(d).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+}
+function beerColor(code) { return '#888'; }
+function statusColor(s) { return {pending:'#E87C3E',kegged:'#58A6FF',dispatched:'#A3C96B',cancelled:'#8B949E'}[s]||'#888'; }
+function badge(text, color) { return `<span class="badge" style="background:${color}22;color:${color}">${text}</span>`; }
+function statusBadge(s) { return badge(s.toUpperCase(), statusColor(s)); }
+
+// ── Render helpers ────────────────────────────────────────────────────────
+function renderPage() { _renderPage(); }
+
+// Search handlers — show/hide rows directly, NO DOM rebuild
+function setOrdersSearch(v) {
+  ordersSearch = v;
+  _filterRows('orders-tbody', v);
+}
+function setKegsSearch(v) {
+  kegsSearch = v;
+  _filterRows('kegs-tbody', v);
+}
+function setBarsSearch(v) {
+  barsSearch = v;
+  _filterRows('bars-tbody', v);
+}
+function setRcSearch(v) {
+  rcSearch = v;
+  _filterRows('rc-tbody', v);
+  // Update counter
+  const container = document.getElementById('rc-tbody');
+  const counter = document.getElementById('rc-count');
+  if (container && counter) {
+    const total = container.querySelectorAll('[data-search]').length;
+    const visible = [...container.querySelectorAll('[data-search]')].filter(el => el.style.display !== 'none').length;
+    counter.textContent = v ? `${visible} of ${total}` : `${total} bars`;
+  }
+}
+function _filterRows(containerId, query) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const q = query.toLowerCase();
+  container.querySelectorAll('[data-search]').forEach(el => {
+    el.style.display = (el.getAttribute('data-search')||'').toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────────
+const NAV = [
+  {id:'dashboard', icon:'◈', label:'Dashboard'},
+  {id:'orders',    icon:'⊞', label:'Orders'},
+  {id:'new-order', icon:'+', label:'New Order'},
+  {id:'kegging',   icon:'⬡', label:'Kegging'},
+  {id:'kegs',      icon:'⬤', label:'Kegs'},
+  {id:'beers',     icon:'🍺', label:'Beers'},
+  {id:'bars',      icon:'≡', label:'Bars'},
+  {id:'ratecard',  icon:'₹', label:'Rate Card'},
+  {id:'invoicing', icon:'🧾', label:'Invoicing'},
+];
+
+let currentTab = 'dashboard';
+
+function renderNav() {
+  const ni = document.getElementById('nav-items');
+  const mn = document.getElementById('mobile-nav-items');
+  ni.innerHTML = NAV.map(n => `
+    <div class="nav-item ${n.id===currentTab?'active':''}" onclick="goTo('${n.id}')">
+      <span class="nav-icon">${n.icon}</span>
+      <span>${n.label}</span>
+    </div>`).join('');
+  mn.innerHTML = NAV.map(n => `
+    <div class="mobile-nav-item ${n.id===currentTab?'active':''}" onclick="goTo('${n.id}')">
+      <span>${n.icon}</span>
+      <span>${n.label}</span>
+    </div>`).join('');
+  document.getElementById('page-title').textContent = (NAV.find(n=>n.id===currentTab)||{label:''}).label;
+}
+
+function toggleMobileNav() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeMobileNav() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+let ratecardUnlocked = false;
+let invoicingUnlocked = false;
+
+function goTo(tab) {
+  if ((tab === 'ratecard' || tab === 'invoicing') && !ratecardUnlocked) {
+    showLockedPage(tab);
+    return;
+  }
+  currentTab = tab;
+  closeMobileNav();
+  renderNav();
+  renderPage();
+}
+
+function showLockedPage(tab) {
+  closeMobileNav();
+  currentTab = tab;
+  renderNav();
+  const label = tab === 'ratecard' ? 'Rate Card' : 'Invoicing';
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center">
+        <div style="font-size:32px;margin-bottom:12px">🔒</div>
+        <div style="font-weight:700;font-size:18px;margin-bottom:6px">${label}</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Co-founders only. Enter the passphrase to unlock.</div>
+        <input id="lock-pw" type="password" class="inp" placeholder="Passphrase…" style="width:100%;margin-bottom:12px;text-align:center"
+          onkeydown="if(event.key==='Enter')checkLockPw('${tab}')">
+        <button class="btn btn-primary" style="width:100%" onclick="checkLockPw('${tab}')">Unlock</button>
+        <div id="lock-err" style="font-size:12px;color:var(--red);margin-top:10px"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:16px" onclick="goTo('dashboard')">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById('lock-pw').focus();
+}
+
+function checkLockPw(tab) {
+  const val = document.getElementById('lock-pw')?.value;
+  if (val === '2D1002!') {
+    ratecardUnlocked = true;
+    invoicingUnlocked = true;
+    currentTab = tab;
+    renderNav();
+    renderPage();
+  } else {
+    document.getElementById('lock-err').textContent = 'Incorrect passphrase.';
+    document.getElementById('lock-pw').value = '';
+  }
+}
+
+// ── Pages ─────────────────────────────────────────────────────────────────
+function _renderPage() {
+  const c = document.getElementById('content');
+  if (currentTab==='dashboard') c.innerHTML = pageDashboard();
+  else if (currentTab==='orders') c.innerHTML = pageOrders();
+  else if (currentTab==='new-order') c.innerHTML = pageNewOrder();
+  else if (currentTab==='kegging') c.innerHTML = pageKegging();
+  else if (currentTab==='kegs') c.innerHTML = pageKegs();
+  else if (currentTab==='beers') c.innerHTML = pageBeers();
+  else if (currentTab==='bars') c.innerHTML = pageBars();
+  else if (currentTab==='ratecard') c.innerHTML = pageRateCard();
+  else if (currentTab==='invoicing') c.innerHTML = pageInvoicing();
+  bindEvents();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+let dashMonthOffset = 0;
+let dashView = 'week'; // 'week' or 'month'
+
+function pageDashboard() {
+  const now = new Date();
+
+  // Current week Mon–Sun
+  const wStart = new Date(now); wStart.setHours(0,0,0,0);
+  wStart.setDate(now.getDate() - ((now.getDay()+6)%7));
+  const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+
+  // Selected month
+  const selDate = new Date(now.getFullYear(), now.getMonth() + dashMonthOffset, 1);
+  const mStart  = new Date(selDate.getFullYear(), selDate.getMonth(), 1);
+  const mEnd    = new Date(selDate.getFullYear(), selDate.getMonth()+1, 1);
+  const isCurrentMonth = dashMonthOffset === 0;
+  const monthLabel = selDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  const shortMonth = selDate.toLocaleString('en-IN',{month:'short'});
+
+  const wEndDisplay = new Date(wEnd); wEndDisplay.setDate(wEnd.getDate()-1);
+  const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+
+  const monthOrders = orders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=mStart&&d<mEnd; });
+  const weekOrders  = orders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=wStart&&d<wEnd; });
+
+  const monthKegs = monthOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+i.qty,0),0);
+  const monthTP   = monthOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
+  const weekKegs  = weekOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+i.qty,0),0);
+  const weekTP    = weekOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
+
+  // Kegging summary
+  const makeSummary = (orderList) => {
+    const s = {};
+    orderList.forEach(o=>o.items.forEach(i=>{
+      if (!s[i.beer]) s[i.beer]={_20:0,_50:0};
+      s[i.beer]._20 += i.size===20?i.qty:0;
+      s[i.beer]._50 += i.size===50?i.qty:0;
+    }));
+    return s;
+  };
+  const summary = makeSummary(dashView==='week' ? weekOrders : monthOrders);
+
+  // Orders list
+  const makeOrderList = (orderList, emptyMsg) =>
+    orderList.slice().reverse().map(o=>{
+      const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown'};
+      const tot = o.items.reduce((s,i)=>s+i.qty,0);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--hover)">
+        <div>
+          <div style="font-weight:600;font-size:14px">${b.barName}</div>
+          <div style="font-size:12px;color:var(--muted)">Delivery: ${fmtDate(o.deliveryDate)} · ${tot} keg${tot!==1?'s':''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--muted)">Ordered</div>
+          <div style="font-size:12px;color:var(--muted)">${fmtDate(o.createdAt)}</div>
+        </div>
+      </div>`;
+    }).join('') || `<div class="empty">${emptyMsg}</div>`;
+
+  const beerSummaryRows = BEERS
+    .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
+    .filter(({s})=>s._20+s._50>0)
+    .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
+    .map(({b,s})=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--hover)">
+      <div style="display:flex;align-items:center;gap:10px">
+        ${badge(b.code,'#888')}
+        <span style="font-size:12px;color:var(--muted)">${b.name}</span>
+      </div>
+      <div style="font-size:12px;text-align:right">
+        <span style="color:var(--muted)">20L:</span> <b>${s._20}</b> &nbsp;·&nbsp;
+        <span style="color:var(--muted)">50L:</span> <b>${s._50}</b>
+      </div>
+    </div>`).join('') || `<div class="empty" style="padding:20px">No orders</div>`;
+
+  const toggleBtns = `
+    <div style="display:flex;background:var(--hover);border-radius:8px;padding:3px;gap:2px">
+      <button class="btn btn-sm ${dashView==='week'?'btn-primary':'btn-ghost'}" onclick="dashView='week';renderPage()" style="border:none;padding:6px 16px">Week</button>
+      <button class="btn btn-sm ${dashView==='month'?'btn-primary':'btn-ghost'}" onclick="dashView='month';renderPage()" style="border:none;padding:6px 16px">Month</button>
+    </div>`;
+
+  if (dashView === 'week') {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <div style="font-size:15px;font-weight:700;color:var(--text)">${weekLabel}</div>
+        ${toggleBtns}
+      </div>
+      <div class="grid4" style="margin-bottom:22px">
+        ${[
+          ['Week Orders',  weekOrders.length, '#F5C842'],
+          ['Week Kegs',    weekKegs,          '#E87C3E'],
+          ['Week TP Kegs', weekTP,            '#A3C96B'],
+          ['Bars',         new Set(weekOrders.map(o=>o.barId)).size, '#58A6FF'],
+        ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="section-title">This Week's Orders</div>
+          ${makeOrderList(weekOrders, 'No orders this week')}
+        </div>
+        <div class="card">
+          <div class="section-title">Kegging Summary — This Week</div>
+          ${beerSummaryRows}
+        </div>
+      </div>`;
+  }
+
+  // Month view
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-ghost" onclick="dashMonthOffset--;renderPage()" style="padding:6px 12px;font-size:16px">‹</button>
+        <div style="text-align:center;min-width:160px">
+          <div style="font-size:16px;font-weight:700;color:var(--accent)">${monthLabel}</div>
+          ${isCurrentMonth?`<div style="font-size:10px;color:var(--muted);margin-top:2px">CURRENT MONTH</div>`:''}
+        </div>
+        <button class="btn btn-ghost" onclick="if(!${isCurrentMonth}){dashMonthOffset++;renderPage()}" style="padding:6px 12px;font-size:16px;${isCurrentMonth?'opacity:0.3;cursor:default':''}">›</button>
+        ${!isCurrentMonth?`<button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" onclick="dashMonthOffset=0;renderPage()">Today</button>`:''}
+      </div>
+      ${toggleBtns}
+    </div>
+    <div class="grid4">
+      ${[
+        [`${shortMonth} Orders`,  monthOrders.length, '#F5C842'],
+        [`${shortMonth} Kegs`,    monthKegs,          '#E87C3E'],
+        [`${shortMonth} TP Kegs`, monthTP,            '#A3C96B'],
+        [`Avg / Order`, monthOrders.length?Math.round(monthKegs/monthOrders.length):0,'#58A6FF'],
+      ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="section-title">${shortMonth} Orders</div>
+        ${makeOrderList(monthOrders, `No orders in ${shortMonth}`)}
+      </div>
+      <div class="card">
+        <div class="section-title">Kegging Summary — ${shortMonth}</div>
+        ${beerSummaryRows}
+      </div>
+    </div>`;
+}
+
+// ── Orders ────────────────────────────────────────────────────────────────
+let ordersSearch = '';
+let expandedOrderId = null;
+let ordersWeekOffset = 0; // 0 = current week
+let pendingKegFills = {};
+
+function pageOrders() {
+  const now = new Date();
+
+  // Calculate selected week Mon–Sun
+  const wStart = new Date(now); wStart.setHours(0,0,0,0);
+  wStart.setDate(now.getDate() - ((now.getDay()+6)%7) + (ordersWeekOffset*7));
+  const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+  const wEndDisplay = new Date(wEnd); wEndDisplay.setDate(wEnd.getDate()-1);
+
+  const isCurrentWeek = ordersWeekOffset === 0;
+  const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+
+  // Build week options from earliest order to current week
+  const allWeekStarts = [];
+  if (orders.length > 0) {
+    const dates = orders.map(o=>new Date(o.deliveryDate)).filter(d=>!isNaN(d));
+    const earliest = new Date(Math.min(...dates));
+    const earliestMon = new Date(earliest);
+    earliestMon.setDate(earliest.getDate() - ((earliest.getDay()+6)%7));
+    earliestMon.setHours(0,0,0,0);
+    const curMon = new Date(now);
+    curMon.setDate(now.getDate() - ((now.getDay()+6)%7));
+    curMon.setHours(0,0,0,0);
+    let d = new Date(curMon);
+    while (d >= earliestMon) {
+      allWeekStarts.push(new Date(d));
+      d.setDate(d.getDate()-7);
+    }
+  }
+
+  const weekOpts = allWeekStarts.map(ws => {
+    const we = new Date(ws); we.setDate(ws.getDate()+6);
+    const curMon = new Date(now); curMon.setDate(now.getDate()-((now.getDay()+6)%7)); curMon.setHours(0,0,0,0);
+    const offset = Math.round((ws - curMon) / (7*24*60*60*1000));
+    const lbl = `${ws.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${we.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+    return `<option value="${offset}" ${offset===ordersWeekOffset?'selected':''}>${lbl}</option>`;
+  }).join('');
+
+  const filtered = orders.slice().reverse().filter(o=>{
+    const d = new Date(o.deliveryDate);
+    const matchWeek = d >= wStart && d < wEnd;
+    const matchSearch = !ordersSearch || (bars.find(x=>x.id===o.barId)||{barName:''}).barName.toLowerCase().includes(ordersSearch.toLowerCase());
+    return matchWeek && matchSearch;
+  });
+
+  const rows = filtered.map(o=>{
+    const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown',area:'',entity:'',licNo:'',licType:''};
+    const totOrder = o.items.reduce((s,i)=>s+i.qty,0);
+    const totTP = o.tpTotal||0;
+    const itemBadges = o.items.map(i=>
+      `${badge(i.beer,beerColor(i.beer))} <span style="font-size:11px">${i.size}L x ${i.qty}</span>`
+    ).join(' &nbsp;');
+
+    // Keg assignment progress — based on ORDER qty
+    const needed20 = o.items.filter(i=>i.size===20).reduce((s,i)=>s+i.qty,0);
+    const needed50 = o.items.filter(i=>i.size===50).reduce((s,i)=>s+i.qty,0);
+    const assignedKegsArr = o.assignedKegs || []; // array of {kegNo, beer}
+    const assigned20 = assignedKegsArr.filter(a=>{const k=kegs.find(x=>x.kegNo===a.kegNo);return k&&k.size===20;}).length;
+    const assigned50 = assignedKegsArr.filter(a=>{const k=kegs.find(x=>x.kegNo===a.kegNo);return k&&k.size===50;}).length;
+    const allAssigned = assigned20>=needed20 && assigned50>=needed50 && totOrder>0;
+    const anyAssigned = assignedKegsArr.length > 0;
+
+    const kegStatus = anyAssigned
+      ? `<span style="font-size:11px;font-weight:600;color:${allAssigned?'var(--green)':'var(--orange)'}">
+          ${allAssigned ? '✓ Kegs assigned' : `${assignedKegsArr.length}/${totOrder} kegs`}
+        </span>`
+      : `<span style="font-size:11px;color:var(--muted)">No kegs assigned</span>`;
+
+    const isExpanded = expandedOrderId === o.id;
+
+    let expandedPanel = '';
+    if (isExpanded) {
+      const breweryKegs20 = kegs.filter(k=>k.size===20&&k.location==='Brewery'&&!k.missing);
+      const breweryKegs50 = kegs.filter(k=>k.size===50&&k.location==='Brewery'&&!k.missing);
+      const datalist20 = breweryKegs20.map(k=>`<option value="${k.kegNo}">${k.kegNo} — ${k.make}</option>`).join('');
+      const datalist50 = breweryKegs50.map(k=>`<option value="${k.kegNo}">${k.kegNo} — ${k.make}</option>`).join('');
+      const activeBeerCodes = new Set(BEERS.map(b=>b.code));
+      const beerOpts = (() => {
+        const activeBatches = breweryBeers.filter(bb => activeBeerCodes.has(bb.beer));
+        if (activeBatches.length > 0) {
+          return activeBatches.map(bb => {
+            const beerInfo = BEERS.find(x=>x.code===bb.beer);
+            return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch})</option>`;
+          }).join('');
+        }
+        return BEERS.map(b=>`<option value="${b.code}|">${b.code} – ${b.name}</option>`).join('');
+      })();
+
+      // Already assigned kegs tags
+      const assignedTags = assignedKegsArr.length > 0
+        ? assignedKegsArr.map(a => {
+            const k = kegs.find(x=>x.kegNo===a.kegNo)||{size:'?'};
+            const beerInfo = BEERS.find(b=>b.code===a.beer);
+            // Show fills breakdown if multiple batches
+            const fillsLabel = a.fills && a.fills.length > 0
+              ? a.fills.map(f=>`${f.beer}/${f.batch}:${f.litres}L`).join(' + ')
+              : (a.batch ? `${a.beer} ${a.batch}` : a.beer);
+            return `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--accent-bg);border:1px solid rgba(212,130,26,0.3);border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;margin:2px">
+              <span>${a.kegNo}</span>
+              <span style="color:var(--muted);font-weight:400">${k.size}L</span>
+              <span style="color:var(--muted);font-size:11px;font-weight:400">${fillsLabel}</span>
+              <span onclick="unassignKeg('${o.id}','${a.kegNo}')" style="cursor:pointer;color:var(--red);font-size:16px;line-height:1;margin-left:2px">×</span>
+            </div>`;
+          }).join('')
+        : `<span style="color:var(--muted);font-size:13px;padding:4px 0">No kegs assigned yet</span>`;
+
+      // Build add-keg panels for each size needed
+      const buildAddPanel = (size, datalist) => {
+        const pKey = `${o.id}_${size}`;
+        const pending = pendingKegFills[pKey];
+        if (!pending) {
+          // Step 1: enter keg number
+          return `<div>
+            <label class="lbl" style="color:var(--orange)">Add ${size}L Keg</label>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <datalist id="klist${size}-${o.id}">${datalist}</datalist>
+              <input id="kinp${size}-${o.id}" class="inp" style="width:150px;font-size:13px" placeholder="Type keg no…"
+                list="klist${size}-${o.id}" autocomplete="off"
+                onkeydown="if(event.key==='Enter'){startKegFill('${o.id}','${size}');event.preventDefault();}">
+              <button class="btn btn-primary btn-sm" onclick="startKegFill('${o.id}','${size}')">Next</button>
+            </div>
+          </div>`;
+        }
+        // Step 2: add fills
+        const fillTags = pending.fills.map((f,fi) => {
+          const bi = BEERS.find(b=>b.code===f.beer);
+          return `<span style="display:inline-flex;align-items:center;gap:4px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;margin:2px">
+            ${f.beer} ${f.batch}: ${f.litres}L
+            <span onclick="removePendingFill('${pKey}',${fi})" style="cursor:pointer;color:var(--red);font-size:14px;margin-left:2px">×</span>
+          </span>`;
+        }).join('');
+        const totalFilled = pending.fills.reduce((s,f)=>s+f.litres,0);
+        return `<div style="background:var(--accent-bg);border:1px solid rgba(212,130,26,0.3);border-radius:8px;padding:12px;min-width:300px">
+          <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:8px">
+            Filling keg <b>${pending.kegNo}</b> (${size}L)
+            <span style="font-weight:400;margin-left:8px;color:var(--muted)">${totalFilled}/${size}L filled</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;min-height:24px">${fillTags||'<span style="font-size:12px;color:var(--muted)">No fills added yet</span>'}</div>
+          <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+            <div>
+              <label class="lbl">Beer + Batch</label>
+              <select id="pbeer-${pKey}" class="inp" style="width:200px;font-size:12px">
+                <option value="">Select beer+batch…</option>${beerOpts}
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Litres</label>
+              <input id="plitres-${pKey}" type="number" min="1" max="${size}" class="inp" style="width:80px;font-size:13px" value="${size-totalFilled}" placeholder="${size-totalFilled}">
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="addPendingFill('${pKey}')">+ Add Fill</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="commitKegAssign('${o.id}','${pKey}')">Assign Keg</button>
+            <button class="btn btn-ghost btn-sm" onclick="cancelKegFill('${pKey}')">Cancel</button>
+          </div>
+        </div>`;
+      };
+
+      expandedPanel = `<tr style="background:#fafbfc">
+        <td colspan="6" style="padding:16px 20px;border-bottom:2px solid var(--border)">
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+              Assigned Kegs
+              <span style="font-weight:400;margin-left:10px">
+                ${needed20>0?`20L: <b style="color:${assigned20>=needed20?'var(--green)':'var(--orange)'}">${assigned20}/${needed20}</b>&nbsp;&nbsp;`:''}
+                ${needed50>0?`50L: <b style="color:${assigned50>=needed50?'var(--green)':'var(--orange)'}">${assigned50}/${needed50}</b>`:''}
+              </span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;min-height:32px">${assignedTags}</div>
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border)">
+            ${needed20>0&&assigned20<needed20 ? buildAddPanel(20,datalist20) : needed20>0 ? `<div style="font-size:13px;color:var(--green);font-weight:600">✓ All ${needed20} x 20L kegs assigned</div>` : ''}
+            ${needed50>0&&assigned50<needed50 ? buildAddPanel(50,datalist50) : needed50>0 ? `<div style="font-size:13px;color:var(--green);font-weight:600">✓ All ${needed50} x 50L kegs assigned</div>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }
+
+    return `<tr data-search='${b.barName} ${b.area}' style="cursor:pointer;${isExpanded?'background:var(--accent-bg);':''}border-bottom:${isExpanded?'none':''}">
+      <td class="sticky-col" onclick="toggleOrderExpand('${o.id}')">
+        <div style="font-weight:600">${b.barName}</div>
+        ${b.entity?`<div style="font-size:11px;color:var(--muted);margin-top:1px">${cleanEntity(b.entity)}</div>`:''}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}${b.licType?` · ${badge(b.licType,'#58A6FF')}`:''}</div>
+      </td>
+      <td style="font-size:12px" onclick="toggleOrderExpand('${o.id}')">${fmtDate(o.deliveryDate)}</td>
+      <td style="font-size:12px" onclick="toggleOrderExpand('${o.id}')">${itemBadges}</td>
+      <td style="font-weight:700;color:var(--accent)" onclick="toggleOrderExpand('${o.id}')">
+        <div>${totOrder}</div>
+        <div style="margin-top:4px">${kegStatus}</div>
+      </td>
+      <td style="font-weight:700;color:var(--orange)" onclick="toggleOrderExpand('${o.id}')">${totTP||'--'}</td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="editOrder('${o.id}')">✎ Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder('${o.id}')">✕</button>
+      </div></td>
+    </tr>${expandedPanel}`;
+  }).join('') || `<tr><td colspan="6" class="empty">No orders found</td></tr>`;
+
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+      <input id="orders-search-inp" class="inp" placeholder="Search bar…" value="${ordersSearch}" oninput="setOrdersSearch(this.value)" style="width:200px">
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost" onclick="ordersWeekOffset--;expandedOrderId=null;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
+        <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="ordersWeekOffset=parseInt(this.value);expandedOrderId=null;_renderPage()">
+          ${weekOpts||`<option value="0">${weekLabel}</option>`}
+        </select>
+        <button class="btn btn-ghost" onclick="ordersWeekOffset++;expandedOrderId=null;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
+        ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="ordersWeekOffset=0;expandedOrderId=null;_renderPage()">This Week</button>`:''}
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      ${filtered.length} order${filtered.length!==1?'s':''} · Click any row to assign kegs
+    </div>
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th class="sticky-col">Bar</th><th>Delivery</th><th>Items</th><th>Order Kegs</th><th>TP Kegs / Kegs</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="orders-tbody">${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function startKegFill(orderId, size) {
+  const inp = document.getElementById(`kinp${size}-${orderId}`);
+  if (!inp) return;
+  const raw = inp.value.trim();
+  const kegNo = raw.split('—')[0].trim() || raw;
+  if (!kegNo) { alert('Please type a keg number.'); return; }
+  const k = kegs.find(x => x.kegNo.toLowerCase() === kegNo.toLowerCase());
+  if (!k) { alert(`Keg "${kegNo}" not found.`); return; }
+  if (k.size !== Number(size)) { alert(`Keg ${kegNo} is ${k.size}L, not ${size}L.`); return; }
+  if (k.location !== 'Brewery') { alert(`Keg ${kegNo} is not at the brewery (currently at ${k.location}).`); return; }
+  if (k.missing) { alert(`Keg ${kegNo} is marked as missing.`); return; }
+  const o = orders.find(x=>x.id===orderId);
+  if (o && (o.assignedKegs||[]).find(a=>a.kegNo===k.kegNo)) { alert('Keg already assigned to this order.'); return; }
+  const pKey = `${orderId}_${size}`;
+  pendingKegFills[pKey] = { kegNo: k.kegNo, fills: [] };
+  _renderPage();
+}
+
+function addPendingFill(pKey) {
+  const beerSel = document.getElementById(`pbeer-${pKey}`);
+  const litresInp = document.getElementById(`plitres-${pKey}`);
+  if (!beerSel || !litresInp) return;
+  const beerBatch = beerSel.value;
+  const litres = Number(litresInp.value);
+  if (!beerBatch) { alert('Please select a beer and batch.'); return; }
+  if (!litres || litres <= 0) { alert('Please enter a valid litres amount.'); return; }
+  const [beerCode, batch] = beerBatch.split('|');
+  if (!pendingKegFills[pKey]) return;
+  pendingKegFills[pKey].fills.push({ beer: beerCode, batch: batch||'', litres });
+  litresInp.value = '';
+  _renderPage();
+}
+
+function removePendingFill(pKey, idx) {
+  if (pendingKegFills[pKey]) {
+    pendingKegFills[pKey].fills.splice(idx, 1);
+    _renderPage();
+  }
+}
+
+function cancelKegFill(pKey) {
+  delete pendingKegFills[pKey];
+  _renderPage();
+}
+
+function commitKegAssign(orderId, pKey) {
+  const pending = pendingKegFills[pKey];
+  if (!pending) return;
+  if (pending.fills.length === 0) { alert('Please add at least one beer+batch fill.'); return; }
+  const o = orders.find(x=>x.id===orderId);
+  const k = kegs.find(x=>x.kegNo===pending.kegNo);
+  if (!o || !k) return;
+  if (!o.assignedKegs) o.assignedKegs = [];
+
+  // Validate total fills equal keg size
+  const totalFilled = pending.fills.reduce((s,f)=>s+f.litres,0);
+  if (totalFilled !== k.size) {
+    alert(`Total fills (${totalFilled}L) must equal the keg size (${k.size}L). Please adjust your fills.`);
+    return;
+  }
+
+  // Use first fill's beer as the primary beer for the keg
+  const primaryFill = pending.fills[0];
+
+  // Deduct litres from each batch
+  pending.fills.forEach(f => {
+    if (f.batch) {
+      const batchEntry = breweryBeers.find(x => x.beer === f.beer && x.batch === f.batch);
+      if (batchEntry) {
+        batchEntry.litres = Math.max(0, (Number(batchEntry.litres)||0) - f.litres);
+      }
+    }
+  });
+  saveBreweryBeers();
+
+  // Store fills alongside the assigned keg
+  o.assignedKegs.push({
+    kegNo: pending.kegNo,
+    beer: primaryFill.beer,
+    batch: primaryFill.batch,
+    kegSize: k.size,
+    fills: pending.fills
+  });
+
+  const bar = bars.find(b=>b.id===o.barId);
+  k.location = bar ? bar.barName : 'Dispatched';
+  k.beer = primaryFill.beer;
+  logKegEvent(pending.kegNo, 'Dispatched', {
+    beer: primaryFill.beer, batch: primaryFill.batch,
+    location: k.location, deliveryDate: o.deliveryDate, orderId: o.id,
+    fills: pending.fills
+  });
+
+  delete pendingKegFills[pKey];
+  saveOrders();
+  saveKegs();
+  renderPage();
+}
+
+function toggleOrderExpand(id) {
+  expandedOrderId = expandedOrderId === id ? null : id;
+  _renderPage();
+}
+
+// ── New Order ─────────────────────────────────────────────────────────────
+let newOrderState = { barId:'', deliveryDate:today(), tpTotal:'', items:[{beer:'BB',size:20,qty:1}], notes:'' };
+let editOrderId = null; // null = new order, string = editing existing
+
+function pageNewOrder() {
+  const activeBars = bars.filter(b=>!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
+  const barDatalist = activeBars.map(b=>`<option value="${b.barName} (${b.area})" data-id="${b.id}">${b.barName} (${b.area})</option>`).join('');
+
+  const selectedBar = newOrderState.barId ? bars.find(x=>x.id==newOrderState.barId) : null;
+  const barInfo = selectedBar
+    ? `<div class="info-box"><b style="color:var(--text)">${cleanEntity(selectedBar.entity)}</b><br>${selectedBar.area} · Lic #${selectedBar.licNo} (${selectedBar.licType})</div>`
+    : '';
+
+  const itemRows = newOrderState.items.map((item,i)=>`
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px">
+      <div>
+        ${i===0?`<label class="lbl">Beer</label>`:''}
+        <select class="inp" onchange="updateItem(${i},'beer',this.value)">
+          ${BEERS.map(b=>`<option value="${b.code}" ${b.code===item.beer?'selected':''}>${b.code} – ${b.name}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        ${i===0?`<label class="lbl">Keg Size</label>`:''}
+        <select class="inp" onchange="updateItem(${i},'size',this.value)">
+          <option value="20" ${item.size==20?'selected':''}>20L</option>
+          <option value="50" ${item.size==50?'selected':''}>50L</option>
+        </select>
+      </div>
+      <div>
+        ${i===0?`<label class="lbl">Order Qty</label>`:''}
+        <input type="number" min="0" class="inp" value="${item.qty}" onchange="updateItem(${i},'qty',this.value)">
+      </div>
+      <div style="${i===0?'margin-top:19px':''}">
+        <button class="btn btn-danger" onclick="removeItem(${i})">✕</button>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div style="max-width:720px">
+      ${editOrderId ? `<div style="padding:10px 14px;background:rgba(88,166,255,0.1);border:1px solid var(--blue);border-radius:6px;margin-bottom:16px;font-size:12px;color:var(--blue)">✎ Editing existing order — changes will overwrite the original</div>` : ''}
+      <div class="card">
+        <div class="section-title">Bar Details</div>
+        <div class="grid2">
+          <div>
+            <label class="lbl">Bar Name *</label>
+            <datalist id="bar-datalist">${barDatalist}</datalist>
+            <input id="bar-search-inp" class="inp" list="bar-datalist" autocomplete="off"
+              placeholder="Type bar name…"
+              value="${selectedBar ? selectedBar.barName + ' (' + selectedBar.area + ')' : newOrderState.barInputVal||''}"
+              oninput="selectBarFromInput(this.value)">
+            ${barInfo}
+          </div>
+          <div>
+            <label class="lbl">Delivery Date *</label>
+            <input type="date" class="inp" value="${newOrderState.deliveryDate}" onchange="newOrderState.deliveryDate=this.value">
+          </div>
+        </div>
+        ${newOrderState.barId ? `
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <label class="lbl" style="color:var(--orange)">Total TP Qty (kegs on Transport Pass)</label>
+          <div style="display:flex;align-items:center;gap:14px">
+            <input type="number" min="0" class="inp" style="width:120px;border-color:var(--orange);font-size:20px;font-weight:700;text-align:center" 
+              value="${newOrderState.tpTotal}" 
+              oninput="newOrderState.tpTotal=this.value;renderPage()" 
+              placeholder="0">
+            <div style="font-size:12px;color:var(--muted)">Total kegs that will appear on the TP document</div>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div>
+            <div class="section-title" style="margin-bottom:4px">Order Items</div>
+            <div style="font-size:11px;color:var(--muted)">Order Qty = what the bar ordered</div>
+          </div>
+          <button class="btn btn-ghost" onclick="addItem()">+ Add Beer</button>
+        </div>
+        ${itemRows}
+        <div style="margin-top:14px">
+          <label class="lbl">Notes / Special Instructions</label>
+          <textarea class="inp" rows="3" placeholder="e.g. call before delivery, back entrance…" oninput="newOrderState.notes=this.value">${newOrderState.notes}</textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-primary" style="padding:12px 28px;font-size:13px" onclick="submitOrder()">${editOrderId ? 'UPDATE ORDER' : 'SAVE ORDER'}</button>
+        <button class="btn btn-ghost" onclick="cancelOrderEdit()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function addItem() { newOrderState.items.push({beer:'BB',size:20,qty:1}); renderPage(); }
+function removeItem(i) { newOrderState.items.splice(i,1); if(!newOrderState.items.length) newOrderState.items=[{beer:'BB',size:20,qty:1}]; renderPage(); }
+function updateItem(i,field,val) { newOrderState.items[i][field]=field==='beer'?val:Number(val); renderPage(); }
+
+function editOrder(id) {
+  const o = orders.find(x=>x.id===id);
+  if (!o) return;
+  editOrderId = id;
+  newOrderState = {
+    barId: String(o.barId),
+    deliveryDate: o.deliveryDate,
+    tpTotal: o.tpTotal||'',
+    items: o.items.map(i=>({...i})),
+    notes: o.notes||''
+  };
+  goTo('new-order');
+}
+
+function deleteOrder(id) {
+  const o = orders.find(x=>x.id===id);
+  if (!o) return;
+  const bar = bars.find(b=>b.id===o.barId)||{barName:'Unknown'};
+  if (!confirm(`Delete order for "${bar.barName}" (${fmtDate(o.deliveryDate)})?\n\nThis cannot be undone.`)) return;
+  orders = orders.filter(x=>x.id!==id);
+  saveOrders();
+  renderPage();
+}
+
+function selectBarFromInput(val) {
+  newOrderState.barInputVal = val;
+  // Try to match bar name from input value (format "Bar Name (Area)")
+  const match = bars.find(b => {
+    const label = `${b.barName} (${b.area})`;
+    return label.toLowerCase() === val.toLowerCase() || b.barName.toLowerCase() === val.toLowerCase();
+  });
+  if (match) {
+    newOrderState.barId = match.id;
+    _renderPage();
+  } else {
+    newOrderState.barId = '';
+  }
+}
+
+function cancelOrderEdit() {
+  editOrderId = null;
+  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
+  goTo('new-order');
+}
+
+function submitOrder() {
+  if (!newOrderState.barId) { alert('Please select a bar from the list.'); return; }
+  const existing = editOrderId ? orders.find(x=>x.id===editOrderId) : null;
+  const order = {
+    id: editOrderId || uid(),
+    barId: Number(newOrderState.barId),
+    deliveryDate: newOrderState.deliveryDate,
+    tpTotal: Number(newOrderState.tpTotal)||0,
+    items: newOrderState.items.map(i=>({...i,size:Number(i.size),qty:Number(i.qty)})),
+    notes: newOrderState.notes,
+    status: existing ? existing.status : 'pending',
+    createdAt: existing ? existing.createdAt : new Date().toISOString()
+  };
+  if (editOrderId) {
+    orders = orders.map(o=>o.id===editOrderId?order:o);
+  } else {
+    orders.push(order);
+  }
+  saveOrders();
+  editOrderId = null;
+  // Stay on New Order tab, reset form
+  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
+  showToast();
+  _renderPage();
+}
+
+// ── Kegging Sheet ─────────────────────────────────────────────────────────
+let keggingDate = today();
+
+function pageKegging() {
+  // Unique delivery dates across all orders
+  const allDates = [...new Set(orders.map(o=>o.deliveryDate))].sort();
+
+  // If current keggingDate has no orders, snap to nearest date that does
+  if (allDates.length && !orders.some(o=>o.deliveryDate===keggingDate)) {
+    // Pick closest future date, or latest past date if none
+    const future = allDates.filter(d=>d>=today());
+    keggingDate = future.length ? future[0] : allDates[allDates.length-1];
+  }
+
+  // Filter orders by selected delivery date
+  const filtered = orders.filter(o=>o.deliveryDate===keggingDate);
+
+  const summary = {};
+  filtered.forEach(o=>o.items.forEach(i=>{
+    if(!summary[i.beer]) summary[i.beer]={_20:0,_50:0};
+    summary[i.beer]._20 += i.size===20?i.qty:0;
+    summary[i.beer]._50 += i.size===50?i.qty:0;
+  }));
+
+  const sumRows = BEERS
+    .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
+    .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
+    .map(({b,s})=>{
+      const L = s._20*20+s._50*50;
+      return `<tr>
+        <td>${badge(b.code,b.color)} <span style="font-size:12px;color:var(--muted);margin-left:8px">${b.name}</span></td>
+        <td style="font-weight:700;color:var(--accent)">${s._20}</td>
+        <td style="font-weight:700;color:var(--accent)">${s._50}</td>
+        <td style="font-weight:700;color:var(--text)">${L}L</td>
+      </tr>`;
+    }).join('');
+
+  const beerCols = BEERS.map(b=>`<th colspan="2" style="text-align:center">${badge(b.code,b.color)}</th>`).join('');
+  const beerSubCols = BEERS.map(()=>`
+    <th style="font-size:9px;padding-top:2px">20L</th>
+    <th style="font-size:9px;padding-top:2px">50L</th>`).join('');
+
+  const detailRows = filtered.map(o=>{
+    const b = bars.find(x=>x.id===o.barId)||{barName:'?',area:''};
+    const cols = BEERS.map(beer=>{
+      const q20=o.items.find(i=>i.beer===beer.code&&i.size===20)?.qty||0;
+      const q50=o.items.find(i=>i.beer===beer.code&&i.size===50)?.qty||0;
+      return `
+        <td style="text-align:center;color:${q20?'var(--accent)':'var(--border)'};font-weight:${q20?700:400}">${q20||'--'}</td>
+        <td style="text-align:center;color:${q50?'var(--accent)':'var(--border)'};font-weight:${q50?700:400}">${q50||'--'}</td>`;
+    }).join('');
+    return `<tr>
+      <td><b>${b.barName}</b></td>
+      <td style="color:var(--muted);font-size:12px">${b.area}</td>
+      ${cols}
+    </tr>`;
+  }).join('') || `<tr><td colspan="13" class="empty">No orders for this delivery date</td></tr>`;
+
+  const dateOpts = allDates.map(d=>`<option value="${d}" ${d===keggingDate?'selected':''}>${fmtDate(d)}</option>`).join('');
+
+  return `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+      <label class="lbl" style="margin:0">Delivery Date</label>
+      <select class="inp" style="width:220px" onchange="keggingDate=this.value;renderPage()">
+        ${dateOpts || `<option value="${keggingDate}">${fmtDate(keggingDate)}</option>`}
+      </select>
+      <span style="font-size:13px;color:var(--muted)">${filtered.length} order${filtered.length!==1?'s':''} on this date</span>
+    </div>
+    <div class="card">
+      <div class="section-title">Total Kegs to Fill — ${fmtDate(keggingDate)}</div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Beer</th><th>20L Kegs</th><th>50L Kegs</th><th>Total Litres</th></tr></thead>
+          <tbody>${sumRows||`<tr><td colspan="4" class="empty">No orders for this date</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="padding:0">
+      <div style="padding:16px 20px 0"><div class="section-title">Per-Bar Breakdown — ${fmtDate(keggingDate)}</div></div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr><th rowspan="2">Bar</th><th rowspan="2">Area</th>${beerCols}</tr>
+            <tr>${beerSubCols}</tr>
+          </thead>
+          <tbody>${detailRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function assignKeg(orderId, kegNo, beerBatch) {
+  if (!kegNo) { alert('Please select a keg number.'); return; }
+  if (!beerBatch) { alert('Please select the beer and batch.'); return; }
+  const [beerCode, batch] = beerBatch.split('|');
+  if (!beerCode) { alert('Please select the beer and batch.'); return; }
+  const o = orders.find(x=>x.id===orderId);
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!o || !k) return;
+  if (!o.assignedKegs) o.assignedKegs = [];
+  if (o.assignedKegs.find(a=>a.kegNo===kegNo)) { alert('Keg already assigned to this order.'); return; }
+
+  // Deduct keg size from batch inventory
+  if (batch) {
+    const batchEntry = breweryBeers.find(x => x.beer === beerCode && x.batch === batch);
+    if (batchEntry) {
+      batchEntry.litres = Math.max(0, (Number(batchEntry.litres)||0) - k.size);
+      saveBreweryBeers();
+    }
+  }
+
+  o.assignedKegs.push({ kegNo, beer: beerCode, batch: batch||'', kegSize: k.size });
+  const bar = bars.find(b=>b.id===o.barId);
+  k.location = bar ? bar.barName : 'Dispatched';
+  k.beer = beerCode;
+  logKegEvent(kegNo, 'Dispatched', { beer: beerCode, batch: batch||'', location: k.location, deliveryDate: o.deliveryDate, orderId: o.id });
+  saveOrders();
+  saveKegs();
+  renderPage();
+}
+
+function unassignKeg(orderId, kegNo) {
+  const o = orders.find(x=>x.id===orderId);
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!o) return;
+  const assigned = (o.assignedKegs||[]).find(a=>a.kegNo===kegNo);
+
+  // Restore litres from fills array if present, else single batch fallback
+  if (assigned) {
+    const fills = assigned.fills && assigned.fills.length > 0
+      ? assigned.fills
+      : (assigned.batch ? [{ beer: assigned.beer, batch: assigned.batch, litres: assigned.kegSize || k?.size || 0 }] : []);
+    fills.forEach(f => {
+      if (f.batch) {
+        const be = breweryBeers.find(x => x.beer === f.beer && x.batch === f.batch);
+        if (be) be.litres = (Number(be.litres)||0) + f.litres;
+      }
+    });
+    if (fills.length > 0) saveBreweryBeers();
+  }
+
+  o.assignedKegs = (o.assignedKegs||[]).filter(a=>a.kegNo!==kegNo);
+  if (k) {
+    logKegEvent(kegNo, 'Returned to Brewery', { location: 'Brewery', beer: 'Empty' });
+    k.location = 'Brewery'; k.beer = 'Empty';
+  }
+  saveOrders();
+  saveKegs();
+  renderPage();
+}
+
+// ── Kegs Tab ──────────────────────────────────────────────────────────────
+let kegsSearch = '';
+let kegsFilter = 'all';
+let breweryBeers = []; // [{beer, batch}]
+let newBatch = { beer: '', batch: '' };
+let returnSelected = new Set();
+let kegHistory = {}; // { kegNo: [{date, event, beer, batch, location, orderId}] }
+let newBeer = { code: '', name: '' };
+
+async function saveBeers() {
+  localStorage.setItem('2down_beers_v1', JSON.stringify(BEERS));
+  try { await sbUpsert('kegs', '__beers__', { beers: BEERS }); } catch(_) {}
+}
+
+function addBeer() {
+  const code = (document.getElementById('new-beer-code')?.value || newBeer.code).trim().toUpperCase();
+  const name = (document.getElementById('new-beer-name')?.value || newBeer.name).trim();
+  if (!code) { alert('Please enter a beer code.'); return; }
+  if (!name) { alert('Please enter a beer name.'); return; }
+  if (BEERS.find(b => b.code === code)) { alert(`Beer code "${code}" already exists.`); return; }
+  // Assign a colour from a palette cycling through options
+  const palette = ['#F5C842','#A3C96B','#E87C3E','#A07060','#58A6FF','#E879A6','#7C6FCD','#4BB8A9','#E8C84A','#A05EA0'];
+  const color = palette[BEERS.length % palette.length];
+  BEERS.push({ code, name, color });
+  newBeer = { code: '', name: '' };
+  saveBeers();
+  renderPage();
+}
+
+function removeBeer(idx) {
+  if (BEERS.length <= 1) return;
+  const removed = BEERS[idx];
+  if (!confirm(`Remove "${removed.code} – ${removed.name}"?\n\nAny active batches for this beer will also be removed.`)) return;
+  BEERS.splice(idx, 1);
+  // Clean up batches for the removed beer
+  const hadBatches = breweryBeers.some(bb => bb.beer === removed.code);
+  breweryBeers = breweryBeers.filter(bb => bb.beer !== removed.code);
+  saveBeers();
+  if (hadBatches) saveBreweryBeers();
+  renderPage();
+}
+
+async function saveKegHistory() {
+  localStorage.setItem('2down_keg_history', JSON.stringify(kegHistory));
+  try { await sbUpsert('kegs', '__keg_history__', { kegHistory }); } catch(_) {}
+}
+
+function logKegEvent(kegNo, event, extra) {
+  if (!kegHistory[kegNo]) kegHistory[kegNo] = [];
+  kegHistory[kegNo].push({ date: new Date().toISOString(), event, ...extra });
+  saveKegHistory();
+}
+
+async function saveBreweryBeers() {
+  localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers));
+  try {
+    await sbUpsert('kegs', '__brewery_beers__', { breweryBeers });
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+}
+
+function pageKegs() {
+  const filtered = kegs.filter(k => {
+    const matchSearch = !kegsSearch ||
+      k.kegNo.toLowerCase().includes(kegsSearch.toLowerCase()) ||
+      k.location.toLowerCase().includes(kegsSearch.toLowerCase()) ||
+      k.beer.toLowerCase().includes(kegsSearch.toLowerCase());
+    const matchFilter =
+      kegsFilter === 'all' ? true :
+      kegsFilter === 'brewery' ? k.location === 'Brewery' :
+      kegsFilter === 'out' ? k.location !== 'Brewery' :
+      kegsFilter === 'missing' ? k.missing : true;
+    return matchSearch && matchFilter;
+  });
+
+  const totalAtBrewery = kegs.filter(k=>k.location==='Brewery').length;
+  const totalOut = kegs.filter(k=>k.location!=='Brewery').length;
+  const totalMissing = kegs.filter(k=>k.missing).length;
+
+  const rows = filtered.map(k => {
+    const rowBg = k.missing ? 'background:rgba(220,38,38,0.05)' : '';
+    return `<tr data-search='${k.kegNo} ${k.location} ${k.beer} ${k.make}' style="${rowBg}">
+      <td style="font-weight:700;font-family:monospace;${k.missing?'color:var(--red)':''}">${k.kegNo}${k.missing?` <span style="font-size:10px;background:#fee2e2;color:var(--red);padding:1px 6px;border-radius:4px;font-family:var(--sans)">MISSING</span>`:''}</td>
+      <td style="font-size:13px">${k.size}L</td>
+      <td style="font-size:13px;color:var(--muted)">${k.make}</td>
+      <td style="font-weight:${k.location==='Brewery'?'400':'600'};color:${k.location==='Brewery'?'var(--green)':'var(--text)'}">${k.location}</td>
+      <td style="font-size:13px">${k.beer === 'Empty' ? `<span style="color:var(--muted)">Empty</span>` : `<span style="font-weight:600">${k.beer}</span>`}</td>
+      <td>
+        <select class="inp" style="font-size:12px;padding:5px 8px;width:180px" onchange="updateKegLocation('${k.kegNo}',this.value)">
+          <option value="${k.location}" selected>${k.location}</option>
+          <option value="Brewery">Brewery</option>
+          ${bars.filter(b=>!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName)).map(b=>`<option value="${b.barName}" ${k.location===b.barName?'selected':''}>${b.barName}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <button class="btn btn-sm ${k.missing?'btn-ghost':'btn-danger'}" onclick="toggleMissing('${k.kegNo}')" style="${k.missing?'color:var(--green);border-color:var(--green)':''}">
+          ${k.missing ? 'Found' : 'Missing'}
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="showKegHistory('${k.kegNo}')" style="margin-top:4px">History</button>
+      </td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" class="empty">No kegs found</td></tr>`;
+
+  const filterBtns = [
+    ['all','All',kegs.length],
+    ['brewery','At Brewery',totalAtBrewery],
+    ['out','Out',totalOut],
+    ['missing','Missing',totalMissing]
+  ].map(([f,l,c])=>`<button class="btn ${kegsFilter===f?'btn-primary':'btn-ghost'}" onclick="kegsFilter='${f}';renderPage()" style="font-size:12px">
+    ${l} <span style="opacity:0.7">(${c})</span>
+  </button>`).join('');
+
+  // Return Kegs section — type-ahead search
+  const kegsOut = kegs.filter(k => k.location !== 'Brewery' && !k.missing);
+  const returnCount = returnSelected.size;
+
+  const returnTags = returnCount > 0
+    ? Array.from(returnSelected).map(kegNo => {
+        const k = kegs.find(x=>x.kegNo===kegNo)||{size:'?',location:''};
+        return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent-bg);border:1px solid rgba(212,130,26,0.3);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;margin:2px">
+          ${kegNo} <span style="color:var(--muted);font-weight:400">${k.size}L</span>
+          <span onclick="toggleReturnKeg('${kegNo}',false)" style="cursor:pointer;color:var(--red);font-size:16px;line-height:1;margin-left:2px">x</span>
+        </span>`;
+      }).join('')
+    : `<span style="color:var(--muted);font-size:13px">No kegs selected yet</span>`;
+
+  // datalist options — only kegs out, not already selected
+  const datalistOpts = kegsOut
+    .filter(k => !returnSelected.has(k.kegNo))
+    .map(k => `<option value="${k.kegNo}">${k.kegNo} — ${k.size}L — ${k.location}</option>`)
+    .join('');
+
+  const returnSection = `
+    <div class="card" style="margin-bottom:20px">
+      <div class="section-title">Return Kegs to Brewery</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+        <div>
+          <label class="lbl">Type keg number</label>
+          <input id="return-keg-inp" class="inp" style="width:220px" placeholder="e.g. M5, 20C1-3…"
+            list="return-keg-list" autocomplete="off"
+            onkeydown="if(event.key==='Enter'){addReturnKeg();event.preventDefault();}">
+          <datalist id="return-keg-list">${datalistOpts}</datalist>
+        </div>
+        <button class="btn btn-primary" onclick="addReturnKeg()">+ Add</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;min-height:32px;margin-bottom:${returnCount>0?'14':'0'}px">${returnTags}</div>
+      ${returnCount > 0 ? `<div style="padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
+        <button class="btn btn-primary" onclick="returnKegs()">Mark ${returnCount} Keg${returnCount!==1?'s':''} as Returned</button>
+        <button class="btn btn-ghost btn-sm" onclick="returnSelected.clear();renderPage()">Clear All</button>
+      </div>` : ''}
+    </div>`;
+
+  return `
+    ${returnSection}
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+      <input class="inp" id="kegs-search-inp" placeholder="Search keg no, location, beer…" value="${kegsSearch}" oninput="setKegsSearch(this.value)" style="width:260px">
+      ${filterBtns}
+    </div>
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Keg No.</th><th>Size</th><th>Make</th><th>Location</th><th>Beer</th><th>Update Location</th><th></th>
+          </tr></thead>
+          <tbody id="kegs-tbody">${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function addReturnKeg() {
+  const inp = document.getElementById('return-keg-inp');
+  if (!inp) return;
+  // Match by keg no — extract just the keg number if user picked from datalist (format "M5 — 20L — Bonobo")
+  const raw = inp.value.trim();
+  const kegNo = raw.split('—')[0].trim() || raw;
+  if (!kegNo) return;
+  const k = kegs.find(x => x.kegNo.toLowerCase() === kegNo.toLowerCase());
+  if (!k) { alert(`Keg "${kegNo}" not found. Check the keg number and try again.`); return; }
+  if (k.location === 'Brewery') { alert(`Keg ${kegNo} is already at the brewery.`); return; }
+  returnSelected.add(k.kegNo);
+  inp.value = '';
+  renderPage();
+}
+
+function toggleReturnKeg(kegNo, add) {
+  if (add) returnSelected.add(kegNo);
+  else returnSelected.delete(kegNo);
+  renderPage();
+}
+
+function returnKegs() {
+  if (returnSelected.size === 0) return;
+  kegs = kegs.map(k => {
+    if (returnSelected.has(k.kegNo)) {
+      logKegEvent(k.kegNo, 'Returned to Brewery', { location: 'Brewery', beer: 'Empty' });
+      return { ...k, location: 'Brewery', beer: 'Empty' };
+    }
+    return k;
+  });
+  returnSelected.clear();
+  saveKegs();
+  showToast();
+  renderPage();
+}
+
+function addBreweryBeer() {
+  const batch = document.getElementById('batch-input')?.value?.trim() || newBatch.batch.trim();
+  if (!batch) { alert('Please enter a batch number.'); return; }
+  breweryBeers.push({ beer: newBatch.beer, batch });
+  newBatch = { beer: 'BB', batch: '' };
+  saveBreweryBeers();
+  renderPage();
+}
+
+function removeBreweryBeer(idx) {
+  breweryBeers.splice(idx, 1);
+  saveBreweryBeers();
+  renderPage();
+}
+
+function updateKegLocation(kegNo, newLocation) {
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!k || k.location === newLocation) return;
+  const prevLocation = k.location;
+  k.location = newLocation;
+  if (newLocation === 'Brewery') {
+    k.beer = 'Empty';
+    logKegEvent(kegNo, 'Returned to Brewery', { location: 'Brewery', beer: 'Empty', from: prevLocation });
+  } else {
+    logKegEvent(kegNo, 'Location Updated', { location: newLocation, beer: k.beer, from: prevLocation });
+  }
+  saveKegs();
+  renderPage();
+}
+
+function toggleMissing(kegNo) {
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!k) return;
+  k.missing = !k.missing;
+  logKegEvent(kegNo, k.missing ? 'Marked Missing' : 'Found', { location: k.location });
+  saveKegs();
+  renderPage();
+}
+
+function showKegHistory(kegNo) {
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!k) return;
+  const history = (kegHistory[kegNo] || []).slice().reverse();
+
+  const eventIcon = { 'Dispatched':'🚚','Returned to Brewery':'🏭','Location Updated':'📍','Marked Missing':'⚠️','Found':'✓' };
+  const eventColor = { 'Dispatched':'#E87C3E','Returned to Brewery':'#16A34A','Location Updated':'#2563EB','Marked Missing':'#DC2626','Found':'#16A34A' };
+
+  const historyRows = history.length > 0
+    ? history.map(h => `
+        <div style="display:flex;gap:14px;padding:12px 0;border-bottom:1px solid #f0f0f0">
+          <div style="font-size:18px;min-width:26px;text-align:center;padding-top:2px">${eventIcon[h.event]||'•'}</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px;color:${eventColor[h.event]||'#666'}">${h.event}</div>
+            <div style="font-size:12px;color:#666;margin-top:3px;display:flex;flex-wrap:wrap;gap:10px">
+              ${h.location ? `<span>Location: <b style="color:#000">${h.location}</b></span>` : ''}
+              ${h.beer && h.beer !== 'Empty' ? `<span>Beer: <b style="color:#000">${h.beer}</b></span>` : ''}
+              ${h.batch ? `<span>Batch: <b style="color:#000">${h.batch}</b></span>` : ''}
+              ${h.deliveryDate ? `<span>Delivery: <b style="color:#000">${fmtDate(h.deliveryDate)}</b></span>` : ''}
+              ${h.from ? `<span>From: <b style="color:#000">${h.from}</b></span>` : ''}
+            </div>
+            <div style="font-size:11px;color:#999;margin-top:4px">${new Date(h.date).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        </div>`).join('')
+    : `<div style="color:#999;font-size:13px;padding:24px 0;text-align:center">No history recorded yet.<br><span style="font-size:12px">Events will appear here when this keg is dispatched or returned.</span></div>`;
+
+  const beerInfo = BEERS.find(b=>b.code===k.beer);
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:480px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+          <div>
+            <div style="font-size:22px;font-weight:700;font-family:monospace;color:#000">${kegNo}</div>
+            <div style="font-size:13px;color:#666;margin-top:5px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+              <span>${k.size}L</span>
+              <span>·</span>
+              <span>${k.make}</span>
+              <span>·</span>
+              <span style="font-weight:600;color:${k.location==='Brewery'?'#16A34A':'#000'}">${k.location}</span>
+              ${k.beer && k.beer !== 'Empty' && beerInfo ? `<span>·</span><span style="background:${beerInfo.color}22;color:${beerInfo.color};padding:1px 8px;border-radius:4px;font-size:11px;font-weight:700">${k.beer}</span>` : ''}
+              ${k.missing ? `<span style="background:#fee2e2;color:#DC2626;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:700">MISSING</span>` : ''}
+            </div>
+          </div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;line-height:1;padding:0">&times;</button>
+        </div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#999;margin-bottom:10px">Keg History &nbsp;(${history.length} events)</div>
+        <div style="max-height:400px;overflow-y:auto">${historyRows}</div>
+        <div style="margin-top:16px;text-align:right">
+          <button onclick="closeModal()" style="background:#e0e0e0;border:none;padding:8px 20px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Beers Tab ─────────────────────────────────────────────────────────────
+let newBatchBeer = ''; // tracks which beer the inline add form is for
+
+function pageBeers() {
+  const beerRows = BEERS.map((b, i) => {
+    const batches = breweryBeers.filter(bb => bb.beer === b.code);
+    const totalLitres = batches.reduce((s, bb) => s + (Number(bb.litres)||0), 0);
+
+    const batchRows = batches.length > 0
+      ? batches.map((bb) => {
+          const globalIdx = breweryBeers.findIndex(x => x.beer === b.code && x.batch === bb.batch);
+          return `<tr style="background:var(--bg)">
+            <td style="padding:8px 14px;font-size:12px" colspan="2"></td>
+            <td style="padding:8px 14px;font-size:13px;font-family:monospace;font-weight:600">${bb.batch}</td>
+            <td style="padding:8px 14px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" min="0" class="inp" style="width:100px;padding:5px 8px;font-size:13px;font-weight:600;color:var(--orange)"
+                  value="${bb.litres||0}"
+                  onchange="updateBatchLitres(${globalIdx}, this.value)"
+                  title="Edit litres">
+                <span style="font-size:12px;color:var(--muted)">L</span>
+              </div>
+            </td>
+            <td style="padding:8px 14px">
+              <button class="btn btn-danger btn-sm" onclick="removeBreweryBeer(${globalIdx})">Remove</button>
+            </td>
+          </tr>`;
+        }).join('')
+      : '';
+
+    const showAddForm = newBatchBeer === b.code;
+
+    return `<tr style="border-bottom:${batches.length>0||showAddForm?'none':''}">
+      <td class="sticky-col" style="font-size:14px;font-weight:600">${b.name}</td>
+      <td style="font-weight:700;font-size:14px">${badge(b.code,'#888')}</td>
+      <td style="font-size:13px;color:var(--muted)">
+        ${batches.length > 0 ? `${batches.length} batch${batches.length!==1?'es':''}` : '<span style="color:var(--muted)">No batches</span>'}
+      </td>
+      <td style="font-weight:700;color:var(--accent)">${totalLitres > 0 ? totalLitres+'L' : '--'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="newBatchBeer=newBatchBeer==='${b.code}'?'':'${b.code}';renderPage()">+ Batch</button>
+          ${BEERS.length > 1
+            ? `<button class="btn btn-danger btn-sm" onclick="removeBeer(${i})">Remove</button>`
+            : ''}
+        </div>
+      </td>
+    </tr>
+    ${batchRows}
+    ${showAddForm ? `<tr style="background:var(--accent-bg);border-bottom:2px solid rgba(212,130,26,0.2)">
+      <td colspan="5" style="padding:12px 14px">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label class="lbl">Batch Number</label>
+            <input id="new-batch-no-${b.code}" class="inp" style="width:160px" placeholder="e.g. BB-2025-04">
+          </div>
+          <div>
+            <label class="lbl">Quantity (Litres)</label>
+            <input id="new-batch-litres-${b.code}" class="inp" style="width:120px" type="number" min="0" placeholder="e.g. 500">
+          </div>
+          <button class="btn btn-primary" onclick="saveBatchForBeer('${b.code}')">Save</button>
+          <button class="btn btn-ghost" onclick="newBatchBeer='';renderPage()">Cancel</button>
+        </div>
+      </td>
+    </tr>` : ''}`;
+  }).join('');
+
+  return `
+    <div style="max-width:760px">
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-title">Beer Inventory</div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th class="sticky-col">Name</th><th>Code</th><th>Batches</th><th>Total Litres</th><th></th></tr></thead>
+            <tbody>${beerRows}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap">
+          <div>
+            <label class="lbl">Beer Code</label>
+            <input id="new-beer-code" class="inp" style="width:100px;text-transform:uppercase" placeholder="e.g. IPA" maxlength="6"
+              value="${newBeer.code}" oninput="newBeer.code=this.value.toUpperCase()">
+          </div>
+          <div>
+            <label class="lbl">Beer Name</label>
+            <input id="new-beer-name" class="inp" style="width:220px" placeholder="e.g. India Pale Ale"
+              value="${newBeer.name}" oninput="newBeer.name=this.value">
+          </div>
+          <button class="btn btn-primary" onclick="addBeer()">+ Add Beer</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveBatchForBeer(beerCode) {
+  const batchEl = document.getElementById(`new-batch-no-${beerCode}`);
+  const litresEl = document.getElementById(`new-batch-litres-${beerCode}`);
+  const batch = batchEl?.value?.trim();
+  const litres = Number(litresEl?.value) || 0;
+  if (!batch) { alert('Please enter a batch number.'); return; }
+  if (breweryBeers.find(x => x.beer === beerCode && x.batch === batch)) {
+    alert('This batch number already exists for this beer.'); return;
+  }
+  breweryBeers.push({ beer: beerCode, batch, litres });
+  newBatchBeer = '';
+  saveBreweryBeers();
+  renderPage();
+}
+
+function updateBatchLitres(idx, value) {
+  if (!breweryBeers[idx]) return;
+  breweryBeers[idx].litres = Number(value) || 0;
+  saveBreweryBeers();
+  // Update total litres display without full re-render
+  renderPage();
+}
+
+// ── Rate Card ─────────────────────────────────────────────────────────────
+// rateCard: { barId: { beerCode: { rate, date } } }
+let rateCard = {};
+let rcSearch = '';
+let rcExpandedBar = null;
+let rcEditBarId = null;
+
+const MRP_PER_LITRE = 134.4;
+
+async function saveRateCard() {
+  localStorage.setItem('2down_ratecard', JSON.stringify(rateCard));
+  try { await sbUpsert('kegs', '__ratecard__', { rateCard }); } catch(_) {}
+}
+
+function pageRateCard() {
+  const activeBars = bars.filter(b => !b.inactive)
+    .sort((a,b) => a.barName.localeCompare(b.barName))
+    .filter(b => !rcSearch || b.barName.toLowerCase().includes(rcSearch.toLowerCase()));
+
+  const rows = activeBars.map(b => {
+    const rates = rateCard[b.id] || {};
+    const isExpanded = rcExpandedBar === b.id;
+    const isEditing = rcEditBarId === b.id;
+
+    const beerRows = BEERS.map(beer => {
+      const r = rates[beer.code] || {};
+      const total = r.rate ? Number(r.rate) : null;
+      const svc = total ? (total - MRP_PER_LITRE).toFixed(2) : null;
+      const rateDate = r.date || '';
+
+      if (isEditing) {
+        return `<tr>
+          <td style="font-weight:600">${badge(beer.code,'#888')} ${beer.name}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:5px">
+              <span style="color:var(--muted);font-size:13px">₹</span>
+              <input type="number" min="0" step="0.1" class="inp" style="width:95px;font-size:13px;padding:5px 8px"
+                placeholder="e.g. 400" value="${total||''}"
+                data-rc-rate="${b.id}-${beer.code}">
+              <span style="color:var(--muted);font-size:12px">/L</span>
+            </div>
+          </td>
+          <td style="font-family:monospace;font-size:13px;color:var(--muted)">₹${MRP_PER_LITRE}/L</td>
+          <td style="font-family:monospace;font-size:13px;color:var(--muted)">${total ? '₹'+svc+'/L' : '—'}</td>
+          <td>
+            <input type="date" class="inp" style="width:150px;font-size:12px;padding:5px 8px"
+              value="${rateDate}"
+              data-rc-date="${b.id}-${beer.code}">
+          </td>
+        </tr>`;
+      }
+
+      return `<tr>
+        <td style="font-weight:600">${badge(beer.code,'#888')} ${beer.name}</td>
+        <td style="font-family:monospace;font-size:14px;font-weight:700">
+          ${total ? `₹${total}/L` : `<span style="color:var(--muted)">—</span>`}
+        </td>
+        <td style="font-family:monospace;font-size:13px;color:var(--muted)">₹${MRP_PER_LITRE}/L</td>
+        <td style="font-family:monospace;font-size:13px;color:var(--muted)">${svc ? '₹'+svc+'/L' : '—'}</td>
+        <td style="font-size:12px;color:var(--muted)">${rateDate ? fmtDate(rateDate) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    // Invoicing entity — always editable inline, not tied to edit mode
+    const entity = rates.__entity__ || 'SAGA GYPSY BEER PROJECT';
+    const entityRow = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap">Service Invoice by:</span>
+      <div style="display:flex;gap:8px">
+        <button onclick="setBarEntity(${b.id},'SAGA GYPSY BEER PROJECT');event.stopPropagation()"
+          class="btn btn-sm ${entity==='SAGA GYPSY BEER PROJECT'?'btn-primary':'btn-ghost'}"
+          style="font-size:12px;padding:5px 12px">SAGA GYPSY BEER PROJECT</button>
+        <button onclick="setBarEntity(${b.id},'TWO DOWN HOSPITALITY');event.stopPropagation()"
+          class="btn btn-sm ${entity==='TWO DOWN HOSPITALITY'?'btn-primary':'btn-ghost'}"
+          style="font-size:12px;padding:5px 12px">TWO DOWN HOSPITALITY</button>
+      </div>
+    </div>`;
+
+    const expandedPanel = isExpanded ? `
+      <div style="padding:0 18px 18px">
+        ${entityRow}
+        <table class="tbl" style="font-size:13px">
+          <thead><tr>
+            <th>Beer</th>
+            <th style="color:var(--orange)">Total Rate</th>
+            <th>MRP Rate</th>
+            <th>Service Rate</th>
+            <th>Effective From</th>
+          </tr></thead>
+          <tbody>${beerRows}</tbody>
+        </table>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          ${isEditing
+            ? `<button class="btn btn-primary btn-sm" onclick="saveRateCardBar(${b.id})">Save</button>
+               <button class="btn btn-ghost btn-sm" onclick="rcEditBarId=null;renderPage()">Cancel</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="rcEditBarId=${b.id};renderPage()">✎ Edit Rates</button>`}
+        </div>
+      </div>` : '';
+
+    return `<div data-search='${b.barName} ${b.area} ${(rates.__entity__||'SAGA GYPSY BEER PROJECT')}' style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;cursor:pointer"
+        onclick="rcExpandedBar=rcExpandedBar===${b.id}?null:${b.id};rcEditBarId=null;renderPage()">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px">${b.barName}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${rates.__entity__ ? `<span style="font-size:11px;color:var(--muted)">${rates.__entity__}</span>` : ''}
+          <div style="font-size:16px;color:var(--muted)">${isExpanded ? '▲' : '▼'}</div>
+        </div>
+      </div>
+      ${expandedPanel}
+    </div>`;
+  }).join('') || `<div class="empty">No bars found</div>`;
+
+  return `
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+      <input id="rc-search-inp" class="inp" placeholder="Search bar or invoicing entity…" value="${rcSearch}"
+        oninput="setRcSearch(this.value)" style="width:300px">
+      <span id="rc-count" style="font-size:12px;color:var(--muted)">${activeBars.length} bars</span>
+      <div style="font-size:12px;color:var(--muted);margin-left:auto">
+        MRP fixed at <b>₹${MRP_PER_LITRE}/litre</b> · Service = Total − MRP
+      </div>
+    </div>
+    <div id="rc-tbody">${rows}</div>`;
+}
+
+function setRate(barId, beerCode, field, value) {
+  if (!rateCard[barId]) rateCard[barId] = {};
+  if (!rateCard[barId][beerCode]) rateCard[barId][beerCode] = { rate: '', date: '' };
+  rateCard[barId][beerCode][field] = value;
+}
+
+function setBarEntity(barId, entity) {
+  if (!rateCard[barId]) rateCard[barId] = {};
+  rateCard[barId].__entity__ = entity;
+  saveRateCard();
+  renderPage();
+}
+
+function saveRateCardBar(barId) {
+  // Read beer rates and dates from DOM
+  BEERS.forEach(beer => {
+    const rateInp = document.querySelector(`input[data-rc-rate="${barId}-${beer.code}"]`);
+    const dateInp = document.querySelector(`input[data-rc-date="${barId}-${beer.code}"]`);
+    if (rateInp || dateInp) {
+      if (!rateCard[barId]) rateCard[barId] = {};
+      if (!rateCard[barId][beer.code]) rateCard[barId][beer.code] = { rate: '', date: '' };
+      if (rateInp) rateCard[barId][beer.code].rate = rateInp.value ? Number(rateInp.value) : '';
+      if (dateInp) rateCard[barId][beer.code].date = dateInp.value || '';
+      if (!rateCard[barId][beer.code].rate && !rateCard[barId][beer.code].date) {
+        delete rateCard[barId][beer.code];
+      }
+    }
+  });
+  rcEditBarId = null;
+  saveRateCard();
+  renderPage();
+}
+
+// ── Invoicing ─────────────────────────────────────────────────────────────
+// invData: { orderId: { mrpDiscount, svcDiscount } }
+let invData = {};
+let invWeekOffset = 0;
+
+async function saveInvData() {
+  localStorage.setItem('2down_inv_data', JSON.stringify(invData));
+  try { await sbUpsert('kegs', '__inv_data__', { invData }); } catch(_) {}
+}
+
+function pageInvoicing() {
+  const now = new Date();
+  const wStart = new Date(now); wStart.setHours(0,0,0,0);
+  wStart.setDate(now.getDate() - ((now.getDay()+6)%7) + (invWeekOffset*7));
+  const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+  const wEndDisplay = new Date(wEnd); wEndDisplay.setDate(wEnd.getDate()-1);
+  const isCurrentWeek = invWeekOffset === 0;
+  const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+
+  // Week options from earliest order
+  const allWeekStarts = [];
+  if (orders.length > 0) {
+    const dates = orders.map(o=>new Date(o.deliveryDate)).filter(d=>!isNaN(d));
+    const earliest = new Date(Math.min(...dates));
+    const earliestMon = new Date(earliest);
+    earliestMon.setDate(earliest.getDate()-((earliest.getDay()+6)%7)); earliestMon.setHours(0,0,0,0);
+    const curMon = new Date(now); curMon.setDate(now.getDate()-((now.getDay()+6)%7)); curMon.setHours(0,0,0,0);
+    let d = new Date(curMon);
+    while (d >= earliestMon) { allWeekStarts.push(new Date(d)); d.setDate(d.getDate()-7); }
+  }
+  const weekOpts = allWeekStarts.map(ws => {
+    const we = new Date(ws); we.setDate(ws.getDate()+6);
+    const curMon = new Date(now); curMon.setDate(now.getDate()-((now.getDay()+6)%7)); curMon.setHours(0,0,0,0);
+    const offset = Math.round((ws-curMon)/(7*24*60*60*1000));
+    const lbl = `${ws.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${we.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+    return `<option value="${offset}" ${offset===invWeekOffset?'selected':''}>${lbl}</option>`;
+  }).join('');
+
+  // Filter orders for this week by delivery date
+  const weekOrders = orders.filter(o=>{
+    const d = new Date(o.deliveryDate);
+    return d >= wStart && d < wEnd;
+  }).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate));
+
+  if (weekOrders.length === 0) {
+    return `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="invWeekOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
+        <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="invWeekOffset=parseInt(this.value);_renderPage()">
+          ${weekOpts||`<option value="0">${weekLabel}</option>`}
+        </select>
+        <button class="btn btn-ghost" onclick="invWeekOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
+        ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}
+      </div>
+      <div class="empty">No orders for this week</div>`;
+  }
+
+  // Build invoice rows
+  const rows = weekOrders.map(o => {
+    const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown'};
+    const rc = rateCard[b.id] || {};
+    const entity = rc.__entity__ || 'SAGA GYPSY BEER PROJECT';
+    const isSaga = entity === 'SAGA GYPSY BEER PROJECT';
+    const inv = invData[o.id] || {};
+    const mrpDisc = Number(inv.mrpDiscount)||0;
+    const svcDisc = Number(inv.svcDiscount)||0;
+
+    // MRP invoice: roundup(134.4 * 1.02 * total litres)
+    const totalLitres = o.items.reduce((s,i)=>s+(i.qty*i.size),0);
+    const mrpGross = Math.ceil(MRP_PER_LITRE * 1.02 * totalLitres);
+    const mrpFinal = mrpGross - mrpDisc;
+
+    // Service invoice: service rate * total litres per beer (no GST added to gross)
+    let svcGross = 0;
+    let ratesMissing = false;
+    o.items.forEach(item => {
+      const r = rc[item.beer] || {};
+      if (r.rate) {
+        const svcRate = Number(r.rate) - MRP_PER_LITRE;
+        svcGross += svcRate * item.qty * item.size;
+      } else {
+        ratesMissing = true;
+      }
+    });
+    svcGross = parseFloat(svcGross.toFixed(2));
+
+    // Final service = service amount - discount
+    const svcFinal = parseFloat((svcGross - svcDisc).toFixed(2));
+
+    // GST = Final Service - Net of GST
+    const gstAmt = isSaga ? parseFloat((svcFinal - svcFinal/1.18).toFixed(2)) : 0;
+
+    // Net of GST = Final Service / 1.18
+    const netOfGST = isSaga ? parseFloat((svcFinal / 1.18).toFixed(2)) : null;
+
+    const itemSummary = o.items.map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+
+    const fmt2 = n => n.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    return `<tr>
+      <td>
+        <div style="font-weight:600">${b.barName}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtDate(o.deliveryDate)} · ${itemSummary}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">${totalLitres}L · Invoice by <b>${entity}</b></div>
+        ${ratesMissing?`<div style="font-size:11px;color:var(--red);margin-top:2px">⚠ Some beers missing rate card entry</div>`:''}
+      </td>
+      <td style="font-family:monospace;font-size:13px;text-align:right">₹${mrpGross.toLocaleString('en-IN')}</td>
+      <td style="text-align:right">
+        <input type="number" min="0" class="inp" style="width:90px;font-size:12px;padding:4px 8px;text-align:right"
+          value="${mrpDisc||''}" placeholder="0"
+          data-inv-mrpdisc="${o.id}">
+      </td>
+      <td style="font-family:monospace;font-size:13px;font-weight:700;text-align:right;color:${mrpFinal<0?'var(--red)':'var(--text)'}">
+        ₹${mrpFinal.toLocaleString('en-IN')}
+      </td>
+      <td style="font-family:monospace;font-size:13px;text-align:right">₹${fmt2(svcGross)}</td>
+      <td style="text-align:right">
+        <input type="number" min="0" class="inp" style="width:90px;font-size:12px;padding:4px 8px;text-align:right"
+          value="${svcDisc||''}" placeholder="0"
+          data-inv-svcdisc="${o.id}">
+      </td>
+      <td style="font-family:monospace;font-size:13px;font-weight:700;text-align:right;color:${svcFinal<0?'var(--red)':'var(--text)'}">
+        ₹${fmt2(svcFinal)}
+      </td>
+      <td style="font-family:monospace;font-size:13px;text-align:right;color:var(--muted)">
+        ${isSaga ? `₹${fmt2(gstAmt)} <span style="font-size:10px">(18%)</span>` : '—'}
+      </td>
+      <td style="font-family:monospace;font-size:13px;font-weight:700;text-align:right">
+        ${netOfGST !== null ? `₹${fmt2(netOfGST)}` : '—'}
+      </td>
+      <td>
+        <button class="btn btn-primary btn-sm" onclick="saveInvRow('${o.id}')">Save</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Totals
+  let totalMrpFinal=0, totalSvcFinal=0, totalGst=0, totalNetOfGST=0;
+  weekOrders.forEach(o=>{
+    const b = bars.find(x=>x.id===o.barId)||{};
+    const rc = rateCard[b.id]||{};
+    const entity = rc.__entity__||'SAGA GYPSY BEER PROJECT';
+    const isSaga = entity==='SAGA GYPSY BEER PROJECT';
+    const inv = invData[o.id]||{};
+    const totalLitres = o.items.reduce((s,i)=>s+(i.qty*i.size),0);
+    const mrpGross = Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
+    const mrpFinal = mrpGross-(Number(inv.mrpDiscount)||0);
+    let svcGross=0;
+    o.items.forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+    svcGross = parseFloat(svcGross.toFixed(2));
+    const svcFinal = parseFloat((svcGross-(Number(inv.svcDiscount)||0)).toFixed(2));
+    const gst = isSaga ? parseFloat((svcFinal - svcFinal/1.18).toFixed(2)) : 0;
+    const netOfGST = isSaga ? parseFloat((svcFinal/1.18).toFixed(2)) : svcFinal;
+    totalMrpFinal+=mrpFinal; totalSvcFinal+=svcFinal; totalGst+=gst; totalNetOfGST+=netOfGST;
+  });
+  const fmt2tot = n => n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  return `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="invWeekOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
+      <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="invWeekOffset=parseInt(this.value);_renderPage()">
+        ${weekOpts||`<option value="0">${weekLabel}</option>`}
+      </select>
+      <button class="btn btn-ghost" onclick="invWeekOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
+      ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}
+      <div style="margin-left:auto;font-size:12px;color:var(--muted)">MRP = roundup(₹134.4 × 1.02 × litres) · SAGA service includes 18% GST</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
+        <div style="font-size:20px;font-weight:700">₹${totalMrpFinal.toLocaleString('en-IN')}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Service Total</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalSvcFinal)}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">GST Total</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalGst)}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Net of GST</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalNetOfGST)}</div>
+      </div>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Bar / Order</th>
+            <th style="text-align:right">MRP Amount</th>
+            <th style="text-align:right">MRP Discount</th>
+            <th style="text-align:right">Final MRP</th>
+            <th style="text-align:right">Service Amount</th>
+            <th style="text-align:right">Svc Discount</th>
+            <th style="text-align:right">Final Service</th>
+            <th style="text-align:right">GST (18%)</th>
+            <th style="text-align:right">Net of GST</th>
+            <th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function saveInvRow(orderId) {
+  const mrpInp = document.querySelector(`input[data-inv-mrpdisc="${orderId}"]`);
+  const svcInp = document.querySelector(`input[data-inv-svcdisc="${orderId}"]`);
+  if (!invData[orderId]) invData[orderId] = {};
+  if (mrpInp) invData[orderId].mrpDiscount = Number(mrpInp.value)||0;
+  if (svcInp) invData[orderId].svcDiscount = Number(svcInp.value)||0;
+  saveInvData();
+  _renderPage();
+}
+
+// ── Bar Registry ──────────────────────────────────────────────────────────
+let barsSearch = '';
+let showAddBar = false;
+let showInactive = false;
+let newBar = {barName:'',entity:'',area:'',licNo:'',licType:'FL3'};
+let selectedBars = new Set();
+let editBarId = null;
+let editBarData = {};
+
+function pageBars() {
+  const activeBars   = bars.filter(b=>!b.inactive);
+  const inactiveBars = bars.filter(b=>b.inactive);
+
+  const searchFn = b =>
+    b.barName.toLowerCase().includes(barsSearch.toLowerCase()) ||
+    (b.area||'').toLowerCase().includes(barsSearch.toLowerCase());
+
+  const filtered = (showInactive ? bars : activeBars).filter(searchFn).sort((a,b)=>a.barName.localeCompare(b.barName));
+
+  const allFilteredIds = filtered.map(b=>b.id);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id=>selectedBars.has(id));
+
+  const rows = filtered.map(b=>{
+    const checked = selectedBars.has(b.id);
+    const isEditing = editBarId === b.id;
+
+    if (isEditing) {
+      return `<tr style="background:rgba(88,166,255,0.07)">
+        <td style="width:36px"></td>
+        <td colspan="6" style="padding:12px">
+          <div class="grid2" style="margin-bottom:10px">
+            ${[['barName','Bar Name *'],['entity','Legal Entity'],['area','Area'],['licNo','Licence No']].map(([k,l])=>`
+              <div>
+                <label class="lbl">${l}</label>
+                <input class="inp" value="${(editBarData[k]||'').replace(/"/g,'&quot;')}" oninput="editBarData['${k}']=this.value">
+              </div>`).join('')}
+            <div>
+              <label class="lbl">Licence Type</label>
+              <select class="inp" onchange="editBarData.licType=this.value">
+                ${['FL3','FLBR2','Form E'].map(t=>`<option ${(editBarData.licType||'FL3')===t?'selected':''}>${t}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="saveEditBar(${b.id})">Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="editBarId=null;renderPage()">Cancel</button>
+          </div>
+        </td>
+      </tr>`;
+    }
+
+    return `<tr data-search='${b.barName} ${b.area||""}' style="background:${checked?'rgba(218,54,51,0.07)':b.inactive?'rgba(139,148,158,0.05)':''}">
+      <td class="sticky-col" style="width:36px;text-align:center">
+        <input type="checkbox" ${checked?'checked':''} onchange="toggleBarSelect(${b.id},this.checked)"
+          style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
+      </td>
+      <td class="sticky-col" style="font-weight:600;${b.inactive?'opacity:0.45':''}">
+        ${b.barName}
+        ${b.inactive?`<span style="font-size:10px;color:var(--muted);margin-left:6px;font-weight:400">INACTIVE</span>`:''}
+      </td>
+      <td style="font-size:12px;color:var(--muted);${b.inactive?'opacity:0.45':''}">${cleanEntity(b.entity)}</td>
+      <td style="${b.inactive?'opacity:0.45':''}">${b.area}</td>
+      <td style="font-family:monospace;${b.inactive?'opacity:0.45':''}">${b.licNo||'--'}</td>
+      <td>${badge(b.licType, b.inactive?'#555':'#58A6FF')}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="startEditBar(${b.id})">✎</button>
+          <button class="btn btn-ghost btn-sm" style="color:${b.inactive?'var(--green)':'var(--orange)'}"
+            onclick="toggleBarActive(${b.id})">${b.inactive?'Reactivate':'Deactivate'}</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const selCount = selectedBars.size;
+  const bulkBar = selCount > 0 ? `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(218,54,51,0.1);border:1px solid rgba(218,54,51,0.3);border-radius:6px;margin-bottom:14px">
+      <span style="font-size:12px;font-weight:600;color:var(--red)">${selCount} bar${selCount!==1?'s':''} selected</span>
+      <button class="btn btn-danger btn-sm" onclick="deactivateSelectedBars()">Deactivate Selected</button>
+      <button class="btn btn-ghost btn-sm" onclick="selectedBars.clear();renderPage()">Clear</button>
+    </div>` : '';
+
+  const addForm = showAddBar ? `
+    <div class="card" style="margin-bottom:18px">
+      <div class="section-title">New Bar</div>
+      <div class="grid2">
+        ${[['barName','Bar Name *'],['entity','Legal Entity'],['area','Area'],['licNo','Licence No']].map(([k,l])=>`
+          <div>
+            <label class="lbl">${l}</label>
+            <input class="inp" id="nb-${k}" value="${newBar[k]||''}" oninput="newBar['${k}']=this.value">
+          </div>`).join('')}
+        <div>
+          <label class="lbl">Licence Type</label>
+          <select class="inp" id="nb-licType" onchange="newBar.licType=this.value">
+            ${['FL3','FLBR2','Form E'].map(t=>`<option ${newBar.licType===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="saveNewBar()">Save Bar</button>
+        <button class="btn btn-ghost" onclick="showAddBar=false;renderPage()">Cancel</button>
+      </div>
+    </div>` : '';
+
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+      <input class="inp" id="bars-search-inp" placeholder="Search bars or area…" value="${barsSearch}" oninput="setBarsSearch(this.value)" style="width:260px">
+      <button class="btn btn-primary" onclick="showAddBar=!showAddBar;renderPage()">${showAddBar?'Cancel':'+ Add Bar'}</button>
+      <button class="btn btn-ghost" onclick="showInactive=!showInactive;renderPage()">
+        ${showInactive?'Hide Inactive':'Show Inactive'} ${inactiveBars.length?`(${inactiveBars.length})`:''}
+      </button>
+      <span style="font-size:11px;color:var(--muted);margin-left:4px">${activeBars.length} active · ${inactiveBars.length} inactive</span>
+    </div>
+    ${addForm}
+    ${bulkBar}
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th style="width:36px;text-align:center">
+              <input type="checkbox" ${allSelected?'checked':''} onchange="toggleAllBars(this.checked,${JSON.stringify(allFilteredIds)})"
+                style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
+            </th>
+            <th class="sticky-col" style="padding-left:14px"></th><th class="sticky-col">Bar</th><th>Legal Entity</th><th>Area</th><th>Lic No</th><th>Type</th><th></th>
+          </tr></thead>
+          <tbody id="bars-tbody">${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function toggleBarSelect(id, checked) {
+  if (checked) selectedBars.add(id); else selectedBars.delete(id);
+  renderPage();
+}
+
+function toggleAllBars(checked, ids) {
+  if (checked) ids.forEach(id=>selectedBars.add(id));
+  else ids.forEach(id=>selectedBars.delete(id));
+  renderPage();
+}
+
+function toggleBarActive(id) {
+  const b = bars.find(x=>x.id===id);
+  if (!b) return;
+  const action = b.inactive ? 'reactivate' : 'deactivate';
+  if (!confirm(`${action.charAt(0).toUpperCase()+action.slice(1)} "${b.barName}"?\n\n${b.inactive?'They will appear in the New Order dropdown again.':'They will be hidden from new orders but all historical data is preserved.'}`)) return;
+  bars = bars.map(x=>x.id===id?{...x,inactive:!x.inactive}:x);
+  saveBars();
+  renderPage();
+}
+
+function deactivateSelectedBars() {
+  const count = selectedBars.size;
+  if (!count) return;
+  const names = bars.filter(b=>selectedBars.has(b.id)).map(b=>b.barName).join('\n• ');
+  if (!confirm(`Deactivate ${count} bar${count!==1?'s':''}?\n\n• ${names}\n\nHistorical orders will be preserved. You can reactivate them anytime.`)) return;
+  bars = bars.map(b=>selectedBars.has(b.id)?{...b,inactive:true}:b);
+  selectedBars.clear();
+  saveBars();
+  renderPage();
+}
+
+function saveNewBar() {
+  if (!newBar.barName) { alert('Bar name is required.'); return; }
+  bars.push({...newBar, id: Date.now(), inactive: false});
+  saveBars();
+  newBar = {barName:'',entity:'',area:'',licNo:'',licType:'FL3'};
+  showAddBar = false;
+  renderPage();
+}
+
+function startEditBar(id) {
+  const b = bars.find(x=>x.id===id);
+  if (!b) return;
+  editBarId = id;
+  editBarData = {...b};
+  showAddBar = false;
+  renderPage();
+}
+
+function saveEditBar(id) {
+  if (!editBarData.barName) { alert('Bar name is required.'); return; }
+  bars = bars.map(b=>b.id===id?{...b,...editBarData}:b);
+  saveBars();
+  editBarId = null;
+  editBarData = {};
+  renderPage();
+}
+
+// ── Transport Pass ────────────────────────────────────────────────────────
+function showTP(orderId) {
+  const o = orders.find(x=>x.id===orderId);
+  if (!o) return;
+  const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown',entity:'',area:'',licNo:'',licType:''};
+  const tot = o.items.reduce((s,i)=>s+(i.tpQty!==undefined?i.tpQty:i.qty),0);
+  const totL = o.items.reduce((s,i)=>{ const q=i.tpQty!==undefined?i.tpQty:i.qty; return s+q*i.size; },0);
+
+  const itemRows = o.items.map(i=>{
+    const beer = BEERS.find(x=>x.code===i.beer)||{name:i.beer};
+    const tpQ = i.tpQty!==undefined?i.tpQty:i.qty;
+    return `<tr>
+      <td style="border:1px solid #ccc;padding:7px 10px">${beer.name}</td>
+      <td style="border:1px solid #ccc;padding:7px 10px">${i.size} Litre</td>
+      <td style="border:1px solid #ccc;padding:7px 10px">${tpQ}</td>
+      <td style="border:1px solid #ccc;padding:7px 10px">${tpQ*i.size}L</td>
+    </tr>`;
+  }).join('');
+
+  const infoRows = [
+    ['TP Date', fmtDate(o.createdAt)],
+    ['Delivery Date', fmtDate(o.deliveryDate)],
+    ['Consignee (Bar)', b.barName],
+    ['Legal Entity', cleanEntity(b.entity)],
+    ['Delivery Area', b.area],
+    ['Licence No.', b.licNo||'--'],
+    ['Licence Type', b.licType],
+  ].map(([k,v])=>`<tr>
+    <td style="border:1px solid #ddd;padding:6px 10px;background:#f9f9f9;font-weight:600;width:40%;font-size:12px">${k}</td>
+    <td style="border:1px solid #ddd;padding:6px 10px;font-size:13px">${v}</td>
+  </tr>`).join('');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <div id="tp-print-content">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+            <div>
+              <h1 style="font-size:20px;font-weight:700;margin:0;font-family:Arial">2 DOWN BREWING CO.</h1>
+              <div style="font-size:11px;color:#666;letter-spacing:2px;margin-top:3px">TRANSPORT PASS</div>
+            </div>
+            <div style="text-align:right;font-size:11px;color:#666">
+              TP #${orderId.slice(-6).toUpperCase()}<br>
+              ${fmtDate(o.createdAt)}
+            </div>
+          </div>
+          <hr style="margin:14px 0;border:none;border-top:2px solid #000">
+          <table style="width:100%;border-collapse:collapse;margin-bottom:18px"><tbody>${infoRows}</tbody></table>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr>
+              ${['Beer','Keg Size','Quantity','Total Volume'].map(h=>`<th style="border:1px solid #000;padding:8px 10px;background:#f0f0f0;text-align:left">${h}</th>`).join('')}
+            </tr></thead>
+            <tbody>
+              ${itemRows}
+              <tr>
+                <td colspan="2" style="border:1px solid #ccc;padding:7px 10px;font-weight:700;text-align:right">TOTAL</td>
+                <td style="border:1px solid #ccc;padding:7px 10px;font-weight:700">${tot}</td>
+                <td style="border:1px solid #ccc;padding:7px 10px;font-weight:700">${totL}L</td>
+              </tr>
+            </tbody>
+          </table>
+          ${o.notes?`<div style="margin-top:14px;font-size:12px;color:#666"><b>Notes:</b> ${o.notes}</div>`:''}
+          <div style="margin-top:44px;display:flex;justify-content:space-between">
+            ${['Authorised Signatory<br>(2 Down Brewing Co.)','Driver / Vehicle','Receiver at Bar'].map(s=>`
+              <div style="text-align:center;width:160px;border-top:1px solid #000;padding-top:8px;font-size:11px;color:#666">${s}</div>`).join('')}
+          </div>
+        </div>
+        <div class="no-print" style="display:flex;gap:10px;margin-top:22px">
+          <button class="btn btn-primary" onclick="printTP()" style="background:#000;color:#fff">🖨 Print / Save PDF</button>
+          <button class="btn btn-ghost" onclick="closeModal()" style="background:#e0e0e0;color:#000">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function printTP() {
+  const content = document.getElementById('tp-print-content').innerHTML;
+  const w = window.open('','_blank','width=700,height=900');
+  w.document.write(`<!DOCTYPE html><html><head><title>Transport Pass – 2 Down</title>
+    <style>body{font-family:Arial,sans-serif;padding:32px;color:#000;max-width:680px;margin:0 auto}
+    @media print{body{padding:16px}}</style>
+    </head><body>${content}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>w.print(), 400);
+}
+
+function closeModal() { document.getElementById('modal-container').innerHTML=''; }
+
+// ── Events ────────────────────────────────────────────────────────────────
+function bindEvents() {}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+loadData(); // async — renders immediately from cache, then syncs from Google Sheets
+</script>
+</body>
+</html>
