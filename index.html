@@ -1267,7 +1267,7 @@ function pageKegging() {
   const filtered = orders.filter(o=>o.deliveryDate===keggingDate);
 
   const summary = {};
-  filtered.forEach(o=>o.items.forEach(i=>{
+  filtered.forEach(o=>(o.items||[]).forEach(i=>{
     if(!summary[i.beer]) summary[i.beer]={_20:0,_50:0};
     summary[i.beer]._20 += i.size===20?i.qty:0;
     summary[i.beer]._50 += i.size===50?i.qty:0;
@@ -1294,8 +1294,8 @@ function pageKegging() {
   const detailRows = filtered.map(o=>{
     const b = bars.find(x=>x.id===o.barId)||{barName:'?',area:''};
     const cols = BEERS.map(beer=>{
-      const q20=o.items.find(i=>i.beer===beer.code&&i.size===20)?.qty||0;
-      const q50=o.items.find(i=>i.beer===beer.code&&i.size===50)?.qty||0;
+      const q20=(o.items||[]).find(i=>i.beer===beer.code&&i.size===20)?.qty||0;
+      const q50=(o.items||[]).find(i=>i.beer===beer.code&&i.size===50)?.qty||0;
       return `
         <td style="text-align:center;color:${q20?'var(--accent)':'var(--border)'};font-weight:${q20?700:400}">${q20||'--'}</td>
         <td style="text-align:center;color:${q50?'var(--accent)':'var(--border)'};font-weight:${q50?700:400}">${q50||'--'}</td>`;
