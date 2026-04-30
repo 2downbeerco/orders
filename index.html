@@ -159,7 +159,7 @@
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:48px 40px;max-width:360px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.08)">
     <div style="font-size:28px;font-weight:800;letter-spacing:2px;color:var(--accent);margin-bottom:4px">2 DOWN</div>
     <div style="font-size:11px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:36px">Brewery · Ops</div>
-    <input type="password" id="main-pw" class="inp" placeholder="Enter passcode" style="width:100%;text-align:center;font-size:18px;letter-spacing:4px;margin-bottom:12px"
+    <input type="password" id="main-pw" class="inp" placeholder="Enter password" style="width:100%;text-align:center;font-size:18px;letter-spacing:4px;margin-bottom:12px"
       onkeydown="if(event.key==='Enter')checkMainPw()">
     <button onclick="checkMainPw()" style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:1px">ENTER</button>
     <div id="main-pw-err" style="color:var(--red);font-size:12px;margin-top:10px;height:16px"></div>
@@ -557,8 +557,8 @@ function showLockedPage(tab) {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center">
         <div style="font-size:32px;margin-bottom:12px">🔒</div>
         <div style="font-weight:700;font-size:18px;margin-bottom:6px">${label}</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Co-founders only. Enter the passphrase to unlock.</div>
-        <input id="lock-pw" type="password" class="inp" placeholder="Passphrase…" style="width:100%;margin-bottom:12px;text-align:center"
+        <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Enter Password</div>
+        <input id="lock-pw" type="password" class="inp" placeholder="Password…" style="width:100%;margin-bottom:12px;text-align:center"
           onkeydown="if(event.key==='Enter')checkLockPw('${tab}')">
         <button class="btn btn-primary" style="width:100%" onclick="checkLockPw('${tab}')">Unlock</button>
         <div id="lock-err" style="font-size:12px;color:var(--red);margin-top:10px"></div>
@@ -577,7 +577,7 @@ function checkLockPw(tab) {
     renderNav();
     renderPage();
   } else {
-    document.getElementById('lock-err').textContent = 'Incorrect passphrase.';
+    document.getElementById('lock-err').textContent = 'Incorrect password.';
     document.getElementById('lock-pw').value = '';
   }
 }
@@ -600,14 +600,16 @@ function _renderPage() {
 // ── Dashboard ─────────────────────────────────────────────────────────────
 let dashMonthOffset = 0;
 let dashView = 'week'; // 'week' or 'month'
+let dashWeekOffset = 0; // 0 = current week
 
 function pageDashboard() {
   const now = new Date();
 
-  // Current week Mon–Sun
+  // Selected week Mon–Sun based on dashWeekOffset
   const wStart = new Date(now); wStart.setHours(0,0,0,0);
-  wStart.setDate(now.getDate() - ((now.getDay()+6)%7));
+  wStart.setDate(now.getDate() - ((now.getDay()+6)%7) + (dashWeekOffset*7));
   const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
+  const isCurrentWeek = dashWeekOffset === 0;
 
   // Selected month
   const selDate = new Date(now.getFullYear(), now.getMonth() + dashMonthOffset, 1);
@@ -623,15 +625,15 @@ function pageDashboard() {
   const monthOrders = orders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=mStart&&d<mEnd; });
   const weekOrders  = orders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=wStart&&d<wEnd; });
 
-  const monthKegs = monthOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+i.qty,0),0);
+  const monthKegs = monthOrders.reduce((s,o)=>s+(o.items||[]).reduce((ss,i)=>ss+i.qty,0),0);
   const monthTP   = monthOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
-  const weekKegs  = weekOrders.reduce((s,o)=>s+o.items.reduce((ss,i)=>ss+i.qty,0),0);
+  const weekKegs  = weekOrders.reduce((s,o)=>s+(o.items||[]).reduce((ss,i)=>ss+i.qty,0),0);
   const weekTP    = weekOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
 
   // Kegging summary
   const makeSummary = (orderList) => {
     const s = {};
-    orderList.forEach(o=>o.items.forEach(i=>{
+    orderList.forEach(o=>(o.items||[]).forEach(i=>{
       if (!s[i.beer]) s[i.beer]={_20:0,_50:0};
       s[i.beer]._20 += i.size===20?i.qty:0;
       s[i.beer]._50 += i.size===50?i.qty:0;
@@ -681,7 +683,15 @@ function pageDashboard() {
   if (dashView === 'week') {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-        <div style="font-size:15px;font-weight:700;color:var(--text)">${weekLabel}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-ghost" onclick="dashWeekOffset--;renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
+          <div style="text-align:center;min-width:190px">
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${weekLabel}</div>
+            ${isCurrentWeek?`<div style="font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:1px">Current Week</div>`:''}
+          </div>
+          <button class="btn btn-ghost" onclick="dashWeekOffset++;renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
+          ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="dashWeekOffset=0;renderPage()">This Week</button>`:''}
+        </div>
         ${toggleBtns}
       </div>
       <div class="grid4" style="margin-bottom:22px">
@@ -694,11 +704,11 @@ function pageDashboard() {
       </div>
       <div class="grid2">
         <div class="card">
-          <div class="section-title">This Week's Orders</div>
+          <div class="section-title">${isCurrentWeek ? "This Week's Orders" : "Orders"}</div>
           ${makeOrderList(weekOrders, 'No orders this week')}
         </div>
         <div class="card">
-          <div class="section-title">Kegging Summary — This Week</div>
+          <div class="section-title">Kegging Summary</div>
           ${beerSummaryRows}
         </div>
       </div>`;
@@ -2485,7 +2495,7 @@ function checkMainPw() {
     loadData();
   } else {
     const err = document.getElementById('main-pw-err');
-    if (err) err.textContent = 'Incorrect passcode.';
+    if (err) err.textContent = 'Incorrect password.';
     document.getElementById('main-pw').value = '';
   }
 }
