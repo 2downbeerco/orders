@@ -330,6 +330,8 @@ async function sbDelete(table, id) {
     console.error(`Supabase delete error (${table}):`, res.status, errText);
   }
 }
+
+async function loadData() {
   try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
   try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
   try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
@@ -1169,14 +1171,22 @@ function editOrder(id) {
   goTo('new-order');
 }
 
-function deleteOrder(id) {
+async function deleteOrder(id) {
   const o = orders.find(x=>x.id===id);
   if (!o) return;
   const bar = bars.find(b=>b.id===o.barId)||{barName:'Unknown'};
   if (!confirm(`Delete order for "${bar.barName}" (${fmtDate(o.deliveryDate)})?\n\nThis cannot be undone.`)) return;
   orders = orders.filter(x=>x.id!==id);
   localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
-  sbDelete('orders', id).catch(e => console.error('Delete sync error:', e));
+  setSyncStatus('Deleting...', '#D4821A');
+  try {
+    await sbDelete('orders', id);
+    setSyncStatus('Deleted', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) {
+    console.error('Delete sync error:', e);
+    setSyncStatus('Deleted locally', '#DC2626');
+  }
   showToast();
   renderPage();
 }
