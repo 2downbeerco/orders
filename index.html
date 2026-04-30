@@ -1263,18 +1263,19 @@ function submitOrder() {
 let keggingDate = '';
 
 function pageKegging() {
-  // Unique delivery dates across all orders
-  const allDates = [...new Set(orders.map(o=>o.deliveryDate))].sort();
+  // Only consider orders with valid delivery dates
+  const validOrders = orders.filter(o => o && o.deliveryDate && o.deliveryDate !== 'undefined');
+  const allDates = [...new Set(validOrders.map(o=>o.deliveryDate))].sort();
 
-  // Always show the latest delivery date by default
+  // Always snap to latest delivery date that has orders
   if (allDates.length) {
-    if (!keggingDate || !orders.some(o=>o.deliveryDate===keggingDate)) {
+    if (!keggingDate || !validOrders.some(o=>o.deliveryDate===keggingDate)) {
       keggingDate = allDates[allDates.length-1];
     }
   }
 
   // Filter orders by selected delivery date
-  const filtered = orders.filter(o=>o.deliveryDate===keggingDate);
+  const filtered = validOrders.filter(o=>o.deliveryDate===keggingDate);
 
   const summary = {};
   filtered.forEach(o=>(o.items||[]).forEach(i=>{
