@@ -696,10 +696,10 @@ function pageDashboard() {
       </div>
       <div class="grid4" style="margin-bottom:22px">
         ${[
-          ['Week Orders',  weekOrders.length, '#F5C842'],
-          ['Week Kegs',    weekKegs,          '#E87C3E'],
-          ['Week TP Kegs', weekTP,            '#A3C96B'],
-          ['Bars',         new Set(weekOrders.map(o=>o.barId)).size, '#58A6FF'],
+          ['No. of Orders',       weekOrders.length,                                            '#F5C842'],
+          ['Kegs Shipped',        weekKegs,                                                     '#E87C3E'],
+          ['Litres Shipped',      weekOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0)+'L', '#A3C96B'],
+          ['Bars',                new Set(weekOrders.map(o=>o.barId)).size,                     '#58A6FF'],
         ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
       </div>
       <div class="grid2">
