@@ -1260,17 +1260,17 @@ function submitOrder() {
 }
 
 // ── Kegging Sheet ─────────────────────────────────────────────────────────
-let keggingDate = today();
+let keggingDate = '';
 
 function pageKegging() {
   // Unique delivery dates across all orders
   const allDates = [...new Set(orders.map(o=>o.deliveryDate))].sort();
 
-  // If current keggingDate has no orders, snap to nearest date that does
-  if (allDates.length && !orders.some(o=>o.deliveryDate===keggingDate)) {
-    // Pick closest future date, or latest past date if none
-    const future = allDates.filter(d=>d>=today());
-    keggingDate = future.length ? future[0] : allDates[allDates.length-1];
+  // Always show the latest delivery date by default
+  if (allDates.length) {
+    if (!keggingDate || !orders.some(o=>o.deliveryDate===keggingDate)) {
+      keggingDate = allDates[allDates.length-1];
+    }
   }
 
   // Filter orders by selected delivery date
