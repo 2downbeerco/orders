@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="2 Down Ops">
@@ -187,7 +190,6 @@
 <div id="modal-container"></div>
 <!-- Toast -->
 <div id="toast">✓ SAVED</div>
-
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────
 const BARS = [
@@ -318,7 +320,16 @@ async function sbUpsert(table, id, data) {
   }
 }
 
-async function loadData() {
+async function sbDelete(table, id) {
+  const res = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: SB_HDR
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Supabase delete error (${table}):`, res.status, errText);
+  }
+}
   try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
   try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
   try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
@@ -1164,7 +1175,9 @@ function deleteOrder(id) {
   const bar = bars.find(b=>b.id===o.barId)||{barName:'Unknown'};
   if (!confirm(`Delete order for "${bar.barName}" (${fmtDate(o.deliveryDate)})?\n\nThis cannot be undone.`)) return;
   orders = orders.filter(x=>x.id!==id);
-  saveOrders();
+  localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
+  sbDelete('orders', id).catch(e => console.error('Delete sync error:', e));
+  showToast();
   renderPage();
 }
 
@@ -2442,8 +2455,17 @@ function closeModal() { document.getElementById('modal-container').innerHTML='';
 function bindEvents() {}
 
 // ── Init ──────────────────────────────────────────────────────────────────
-document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
-loadData(); // async — renders immediately from cache, then syncs from Google Sheets
+window.onerror = function(msg, src, line, col, err) {
+  document.body.innerHTML = `<div style="padding:30px;font-family:monospace;background:#fff;color:#c00">
+    <b>JS Error:</b><br>${msg}<br>Line: ${line}<br>${err ? err.stack : ''}
+  </div>`;
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('topbar-date');
+  if (el) el.textContent = new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  loadData();
+});
 </script>
 </body>
 </html>
