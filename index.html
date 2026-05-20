@@ -839,7 +839,7 @@ function pageOrders() {
             return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch})</option>`;
           }).join('');
         }
-        return BEERS.map(b=>`<option value="${b.code}|">${b.code} – ${b.name}</option>`).join('');
+        return BEERS.filter(b=>!b.inactive).map(b=>`<option value="${b.code}|">${b.code} – ${b.name}</option>`).join('');
       })();
 
       // Already assigned kegs tags
@@ -1101,7 +1101,7 @@ function pageNewOrder() {
       <div>
         ${i===0?`<label class="lbl">Beer</label>`:''}
         <select class="inp" onchange="updateItem(${i},'beer',this.value)">
-          ${BEERS.map(b=>`<option value="${b.code}" ${b.code===item.beer?'selected':''}>${b.code} – ${b.name}</option>`).join('')}
+          ${BEERS.filter(b=>!b.inactive).map(b=>`<option value="${b.code}" ${b.code===item.beer?'selected':''}>${b.code} – ${b.name}</option>`).join('')}
         </select>
       </div>
       <div>
@@ -1738,6 +1738,7 @@ function showKegHistory(kegNo) {
 // ── Beers Tab ─────────────────────────────────────────────────────────────
 let newBatchBeer = ''; // tracks which beer the inline add form is for
 let consumedFilter = 'all'; // filter for consumed batches
+let beersSubTab = 'active'; // 'active' or 'consumed'
 
 function pageBeers() {
   const beerRows = BEERS.map((b, i) => {
@@ -1830,82 +1831,115 @@ function pageBeers() {
     </tr>` : ''}`;
   }).join('');
 
-  return `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;max-width:1100px">
-      <div class="card">
-        <div class="section-title">Active Batches</div>
-        <div class="tbl-wrap">
-          <table class="tbl">
-            <thead><tr><th class="sticky-col">Name</th><th>Code</th><th>Batch</th><th>Litres</th><th></th></tr></thead>
-            <tbody>
-              ${BEERS.map((b, i) => {
-                const batches = breweryBeers.filter(bb => bb.beer === b.code);
-                const activeBatches = batches.filter(bb => !bb.inactive && Number(bb.litres) > 0);
-                const showAddForm = newBatchBeer === b.code;
-                const isInactiveBeer = b.inactive;
+  // Sub-tab toggle UI
+  const subTabBar = `
+    <div style="display:flex;gap:2px;background:var(--hover);border-radius:8px;padding:3px;margin-bottom:20px;width:fit-content">
+      <button class="btn btn-sm ${beersSubTab==='active'?'btn-primary':'btn-ghost'}"
+        onclick="beersSubTab='active';renderPage()" style="border:none;padding:7px 20px;font-size:13px">
+        Active Batches
+      </button>
+      <button class="btn btn-sm ${beersSubTab==='consumed'?'btn-primary':'btn-ghost'}"
+        onclick="beersSubTab='consumed';renderPage()" style="border:none;padding:7px 20px;font-size:13px">
+        Consumed Batches
+      </button>
+    </div>`;
 
-                const beerHeader = `<tr style="${isInactiveBeer?'opacity:0.5':''}">
-                  <td class="sticky-col" style="font-size:13px;font-weight:600">${b.name}</td>
-                  <td>${badge(b.code,'#888')}</td>
-                  <td colspan="2" style="font-size:12px;color:var(--muted)">${activeBatches.length > 0 ? activeBatches.length+' batch'+( activeBatches.length!==1?'es':'') : 'No active batches'}</td>
-                  <td>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap">
-                      ${!isInactiveBeer ? `<button class="btn btn-ghost btn-sm" onclick="newBatchBeer=newBatchBeer==='${b.code}'?'':'${b.code}';renderPage()">+ Batch</button>` : ''}
-                      ${BEERS.length > 1 ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}" style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}" onclick="toggleBeerActive(${i})">${isInactiveBeer?'Activate':'Deactivate'}</button>` : ''}
-                    </div>
-                  </td>
-                </tr>`;
+  if (beersSubTab === 'active') {
+    return `
+      <div style="max-width:820px">
+        ${subTabBar}
+        <div class="card">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th class="sticky-col">Name</th><th>Code</th><th>Batch</th><th>Litres</th><th></th></tr></thead>
+              <tbody>
+                ${BEERS.filter(b => !b.inactive).map((b, i) => {
+                  const batches = breweryBeers.filter(bb => bb.beer === b.code);
+                  const activeBatches = batches.filter(bb => !bb.inactive && Number(bb.litres) > 0);
+                  const showAddForm = newBatchBeer === b.code;
+                  const isInactiveBeer = b.inactive;
 
-                const batchRows = activeBatches.map(bb => {
-                  const globalIdx = breweryBeers.findIndex(x => x.beer === b.code && x.batch === bb.batch);
-                  return `<tr style="background:var(--bg)">
-                    <td style="padding:6px 14px" colspan="2"></td>
-                    <td style="padding:6px 14px;font-family:monospace;font-size:13px;font-weight:600;cursor:pointer;color:var(--accent);text-decoration:underline"
-                      onclick="showBatchHistory('${b.code}','${bb.batch}')">${bb.batch}</td>
-                    <td style="padding:6px 14px">
-                      <div style="display:flex;align-items:center;gap:6px">
-                        <input type="number" min="0" class="inp" style="width:90px;padding:4px 8px;font-size:13px;font-weight:600;color:var(--orange)"
-                          value="${bb.litres||0}" onchange="updateBatchLitres(${globalIdx}, this.value)">
-                        <span style="font-size:11px;color:var(--muted)">L</span>
+                  const beerHeader = `<tr style="${isInactiveBeer?'opacity:0.5':''}">
+                    <td class="sticky-col" style="font-size:13px;font-weight:600">${b.name}</td>
+                    <td>${badge(b.code,'#888')}</td>
+                    <td colspan="2" style="font-size:12px;color:var(--muted)">${activeBatches.length > 0 ? activeBatches.length+' batch'+(activeBatches.length!==1?'es':'') : 'No active batches'}</td>
+                    <td>
+                      <div style="display:flex;gap:4px;flex-wrap:wrap">
+                        ${!isInactiveBeer ? `<button class="btn btn-ghost btn-sm" onclick="newBatchBeer=newBatchBeer==='${b.code}'?'':'${b.code}';renderPage()">+ Batch</button>` : ''}
+                        ${BEERS.length > 1 ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}" style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}" onclick="toggleBeerActive(${i})">${isInactiveBeer?'Activate':'Deactivate'}</button>` : ''}
                       </div>
                     </td>
-                    <td style="padding:6px 14px">
-                      <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
-                    </td>
                   </tr>`;
-                }).join('');
 
-                const addForm = showAddForm ? `<tr style="background:var(--accent-bg)">
-                  <td colspan="5" style="padding:10px 14px">
-                    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-                      <div><label class="lbl">Batch No.</label>
-                        <input id="new-batch-no-${b.code}" class="inp" style="width:130px" placeholder="e.g. BB-2025-04"></div>
-                      <div><label class="lbl">Litres</label>
-                        <input id="new-batch-litres-${b.code}" class="inp" style="width:90px" type="number" min="0" placeholder="500"></div>
-                      <button class="btn btn-primary btn-sm" onclick="saveBatchForBeer('${b.code}')">Save</button>
-                      <button class="btn btn-ghost btn-sm" onclick="newBatchBeer='';renderPage()">Cancel</button>
-                    </div>
-                  </td>
-                </tr>` : '';
+                  const batchRows = activeBatches.map(bb => {
+                    const globalIdx = breweryBeers.findIndex(x => x.beer === b.code && x.batch === bb.batch);
+                    return `<tr style="background:var(--bg)">
+                      <td style="padding:6px 14px" colspan="2"></td>
+                      <td style="padding:6px 14px;font-family:monospace;font-size:13px;font-weight:600;cursor:pointer;color:var(--accent);text-decoration:underline"
+                        onclick="showBatchHistory('${b.code}','${bb.batch}')">${bb.batch}</td>
+                      <td style="padding:6px 14px">
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <input type="number" min="0" class="inp" style="width:90px;padding:4px 8px;font-size:13px;font-weight:600;color:var(--orange)"
+                            value="${bb.litres||0}" onchange="updateBatchLitres(${globalIdx}, this.value)">
+                          <span style="font-size:11px;color:var(--muted)">L</span>
+                        </div>
+                      </td>
+                      <td style="padding:6px 14px">
+                        <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
+                      </td>
+                    </tr>`;
+                  }).join('');
 
-                return beerHeader + batchRows + addForm;
+                  const addForm = showAddForm ? `<tr style="background:var(--accent-bg)">
+                    <td colspan="5" style="padding:10px 14px">
+                      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+                        <div><label class="lbl">Batch No.</label>
+                          <input id="new-batch-no-${b.code}" class="inp" style="width:130px" placeholder="e.g. 51"></div>
+                        <div><label class="lbl">Litres</label>
+                          <input id="new-batch-litres-${b.code}" class="inp" style="width:90px" type="number" min="0" placeholder="500"></div>
+                        <button class="btn btn-primary btn-sm" onclick="saveBatchForBeer('${b.code}')">Save</button>
+                        <button class="btn btn-ghost btn-sm" onclick="newBatchBeer='';renderPage()">Cancel</button>
+                      </div>
+                    </td>
+                  </tr>` : '';
+
+                  return beerHeader + batchRows + addForm;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap">
+            <div><label class="lbl">Beer Code</label>
+              <input id="new-beer-code" class="inp" style="width:90px;text-transform:uppercase" placeholder="e.g. IPA" maxlength="6"
+                value="${newBeer.code}" oninput="newBeer.code=this.value.toUpperCase()"></div>
+            <div><label class="lbl">Beer Name</label>
+              <input id="new-beer-name" class="inp" style="width:180px" placeholder="e.g. India Pale Ale"
+                value="${newBeer.name}" oninput="newBeer.name=this.value"></div>
+            <button class="btn btn-primary" onclick="addBeer()">+ Add Beer</button>
+          </div>
+          ${BEERS.some(b => b.inactive) ? `
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px">Deactivated Beers</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              ${BEERS.filter(b=>b.inactive).map((b,i) => {
+                const realIdx = BEERS.findIndex(x=>x.code===b.code);
+                return `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--hover);border-radius:8px;opacity:0.6">
+                  ${badge(b.code,'#888')}
+                  <span style="font-size:13px;color:var(--muted)">${b.name}</span>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--green);border-color:var(--green)" onclick="toggleBeerActive(${realIdx})">Activate</button>
+                </div>`;
               }).join('')}
-            </tbody>
-          </table>
+            </div>
+          </div>` : ''}
         </div>
-        <div style="display:flex;gap:10px;align-items:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap">
-          <div><label class="lbl">Beer Code</label>
-            <input id="new-beer-code" class="inp" style="width:90px;text-transform:uppercase" placeholder="e.g. IPA" maxlength="6"
-              value="${newBeer.code}" oninput="newBeer.code=this.value.toUpperCase()"></div>
-          <div><label class="lbl">Beer Name</label>
-            <input id="new-beer-name" class="inp" style="width:180px" placeholder="e.g. India Pale Ale"
-              value="${newBeer.name}" oninput="newBeer.name=this.value"></div>
-          <button class="btn btn-primary" onclick="addBeer()">+ Add Beer</button>
-        </div>
-      </div>
+      </div>`;
+  }
 
+  // Consumed sub-tab
+  return `
+    <div style="max-width:620px">
+      ${subTabBar}
       <div class="card">
-        <div class="section-title">Consumed Batches</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
           <button class="btn btn-sm ${consumedFilter==='all'?'btn-primary':'btn-ghost'}" onclick="consumedFilter='all';renderPage()">All</button>
           ${BEERS.map(b=>`<button class="btn btn-sm ${consumedFilter===b.code?'btn-primary':'btn-ghost'}" onclick="consumedFilter='${b.code}';renderPage()">${b.code}</button>`).join('')}
@@ -1946,8 +1980,14 @@ function toggleBatchActive(idx) {
 
 function toggleBeerActive(idx) {
   if (!BEERS[idx]) return;
-  BEERS[idx].inactive = !BEERS[idx].inactive;
+  const beer = BEERS[idx];
+  beer.inactive = !beer.inactive;
+  // Sync batch inactive state with beer state
+  breweryBeers.forEach(bb => {
+    if (bb.beer === beer.code) bb.inactive = beer.inactive;
+  });
   saveBeers();
+  saveBreweryBeers();
   renderPage();
 }
 
