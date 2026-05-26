@@ -3118,9 +3118,14 @@ function pageOrders() {
       const datalist20 = breweryKegs20.map(k=>`<option value="${k.kegNo}">${k.kegNo} — ${k.make}</option>`).join('');
       const datalist50 = breweryKegs50.map(k=>`<option value="${k.kegNo}">${k.kegNo} — ${k.make}</option>`).join('');
       const activeBeerCodes = new Set(BEERS.filter(b=>!b.inactive).map(b=>b.code));
+      // Only show beers that are in this order's items
+      const orderBeerCodes = new Set((o.items||[]).map(i=>i.beer));
       const beerOpts = (() => {
         const activeBatches = breweryBeers.filter(bb =>
-          activeBeerCodes.has(bb.beer) && !bb.inactive && Number(bb.litres) > 0
+          activeBeerCodes.has(bb.beer) &&
+          orderBeerCodes.has(bb.beer) &&
+          !bb.inactive &&
+          Number(bb.litres) > 0
         );
         if (activeBatches.length > 0) {
           return activeBatches.map(bb => {
@@ -3128,7 +3133,10 @@ function pageOrders() {
             return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch}, ${bb.litres}L)</option>`;
           }).join('');
         }
-        return BEERS.filter(b=>!b.inactive).map(b=>`<option value="${b.code}|">${b.code} – ${b.name}</option>`).join('');
+        return [...orderBeerCodes].filter(c=>activeBeerCodes.has(c)).map(c=>{
+          const b = BEERS.find(x=>x.code===c);
+          return `<option value="${c}|">${c} – ${b?.name||c}</option>`;
+        }).join('');
       })();
 
       // Already assigned kegs tags
