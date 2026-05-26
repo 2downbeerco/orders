@@ -3355,8 +3355,13 @@ function commitKegAssign(orderId, pKey) {
 
   const bar = bars.find(b=>b.id===o.barId);
   k.location = bar ? bar.barName : 'Dispatched';
-  // Store beer+batch so it shows correctly in kegs tab
   k.beer = primaryFill.batch ? `${primaryFill.beer}${primaryFill.batch}` : primaryFill.beer;
+
+  // Clear any previous dispatch history for this keg+order before logging
+  if (kegHistory[pending.kegNo]) {
+    kegHistory[pending.kegNo] = kegHistory[pending.kegNo].filter(e => e.orderId !== orderId);
+  }
+
   logKegEvent(pending.kegNo, 'Dispatched', {
     beer: primaryFill.beer, batch: primaryFill.batch,
     location: k.location, deliveryDate: o.deliveryDate, orderId: o.id,
@@ -3500,7 +3505,6 @@ async function deleteOrder(id) {
       const batchEntry = breweryBeers.find(x => x.beer === f.beer && x.batch === f.batch);
       if (batchEntry) {
         batchEntry.litres = (Number(batchEntry.litres)||0) + f.litres;
-        // Reactivate if it was deactivated at 0
         if (batchEntry.inactive) batchEntry.inactive = false;
         inventoryChanged = true;
       }
@@ -3512,8 +3516,14 @@ async function deleteOrder(id) {
       k.location = seed ? seed.location : 'Brewery';
       k.beer = seed ? seed.beer : 'Empty';
     }
+    // Remove keg history entries for this order
+    if (kegHistory[a.kegNo]) {
+      kegHistory[a.kegNo] = kegHistory[a.kegNo].filter(e => e.orderId !== id);
+    }
   });
-  if (inventoryChanged) { saveBreweryBeers(); saveKegs(); }
+  if (inventoryChanged) { saveBreweryBeers(); }
+  saveKegs();
+  saveKegHistory();
 
   orders = orders.filter(x=>x.id!==id);
   localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
@@ -3722,9 +3732,13 @@ function unassignKeg(orderId, kegNo) {
   o.assignedKegs = (o.assignedKegs||[]).filter(a=>a.kegNo!==kegNo);
   if (k) {
     const seed = KEG_SEED.find(x=>x.kegNo===kegNo);
-    logKegEvent(kegNo, 'Returned to Brewery', { location: seed ? seed.location : 'Brewery', beer: seed ? seed.beer : 'Empty' });
     k.location = seed ? seed.location : 'Brewery';
     k.beer = seed ? seed.beer : 'Empty';
+  }
+  // Remove this keg's dispatch history for this order
+  if (kegHistory[kegNo]) {
+    kegHistory[kegNo] = kegHistory[kegNo].filter(e => e.orderId !== orderId);
+    saveKegHistory();
   }
   saveOrders();
   saveKegs();
