@@ -3815,8 +3815,8 @@ function pageKegs() {
       <td>
         <select class="inp" style="font-size:12px;padding:5px 8px;width:180px" onchange="updateKegLocation('${k.kegNo}',this.value)">
           <option value="${k.location}" selected>${k.location}</option>
-          <option value="Brewery">Brewery</option>
-          <option value="Unknown">Unknown</option>
+          ${k.location!=='Brewery'?'<option value="Brewery">Brewery</option>':''}
+          ${k.location!=='Unknown'?'<option value="Unknown">Unknown</option>':''}
           ${bars.filter(b=>!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName)).map(b=>`<option value="${b.barName}" ${k.location===b.barName?'selected':''}>${b.barName}</option>`).join('')}
         </select>
       </td>
