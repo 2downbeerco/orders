@@ -3329,8 +3329,8 @@ function commitKegAssign(orderId, pKey) {
     return;
   }
 
-  // Use first fill's beer as the primary beer for the keg
-  const primaryFill = pending.fills[0];
+  // Use the fill with the most litres as primary
+  const primaryFill = pending.fills.reduce((max, f) => f.litres > max.litres ? f : max, pending.fills[0]);
 
   // Deduct litres from each batch
   pending.fills.forEach(f => {
@@ -3338,6 +3338,7 @@ function commitKegAssign(orderId, pKey) {
       const batchEntry = breweryBeers.find(x => x.beer === f.beer && x.batch === f.batch);
       if (batchEntry) {
         batchEntry.litres = Math.max(0, (Number(batchEntry.litres)||0) - f.litres);
+        if (batchEntry.litres === 0) batchEntry.inactive = true;
       }
     }
   });
@@ -3354,7 +3355,8 @@ function commitKegAssign(orderId, pKey) {
 
   const bar = bars.find(b=>b.id===o.barId);
   k.location = bar ? bar.barName : 'Dispatched';
-  k.beer = primaryFill.beer;
+  // Store beer+batch so it shows correctly in kegs tab
+  k.beer = primaryFill.batch ? `${primaryFill.beer}${primaryFill.batch}` : primaryFill.beer;
   logKegEvent(pending.kegNo, 'Dispatched', {
     beer: primaryFill.beer, batch: primaryFill.batch,
     location: k.location, deliveryDate: o.deliveryDate, orderId: o.id,
