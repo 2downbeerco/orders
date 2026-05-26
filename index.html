@@ -3117,13 +3117,15 @@ function pageOrders() {
       const breweryKegs50 = kegs.filter(k=>k.size===50&&k.location==='Brewery'&&!k.missing);
       const datalist20 = breweryKegs20.map(k=>`<option value="${k.kegNo}">${k.kegNo} — ${k.make}</option>`).join('');
       const datalist50 = breweryKegs50.map(k=>`<option value="${k.kegNo}">${k.kegNo} — ${k.make}</option>`).join('');
-      const activeBeerCodes = new Set(BEERS.map(b=>b.code));
+      const activeBeerCodes = new Set(BEERS.filter(b=>!b.inactive).map(b=>b.code));
       const beerOpts = (() => {
-        const activeBatches = breweryBeers.filter(bb => activeBeerCodes.has(bb.beer));
+        const activeBatches = breweryBeers.filter(bb =>
+          activeBeerCodes.has(bb.beer) && !bb.inactive && Number(bb.litres) > 0
+        );
         if (activeBatches.length > 0) {
           return activeBatches.map(bb => {
             const beerInfo = BEERS.find(x=>x.code===bb.beer);
-            return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch})</option>`;
+            return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch}, ${bb.litres}L)</option>`;
           }).join('');
         }
         return BEERS.filter(b=>!b.inactive).map(b=>`<option value="${b.code}|">${b.code} – ${b.name}</option>`).join('');
