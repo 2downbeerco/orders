@@ -3505,9 +3505,13 @@ async function deleteOrder(id) {
         inventoryChanged = true;
       }
     });
-    // Also return keg to brewery
+    // Return keg to its original location from KEG_SEED
     const k = kegs.find(x=>x.kegNo===a.kegNo);
-    if (k) { k.location = 'Brewery'; k.beer = 'Empty'; }
+    if (k) {
+      const seed = KEG_SEED.find(x=>x.kegNo===a.kegNo);
+      k.location = seed ? seed.location : 'Brewery';
+      k.beer = seed ? seed.beer : 'Empty';
+    }
   });
   if (inventoryChanged) { saveBreweryBeers(); saveKegs(); }
 
@@ -3717,8 +3721,10 @@ function unassignKeg(orderId, kegNo) {
 
   o.assignedKegs = (o.assignedKegs||[]).filter(a=>a.kegNo!==kegNo);
   if (k) {
-    logKegEvent(kegNo, 'Returned to Brewery', { location: 'Brewery', beer: 'Empty' });
-    k.location = 'Brewery'; k.beer = 'Empty';
+    const seed = KEG_SEED.find(x=>x.kegNo===kegNo);
+    logKegEvent(kegNo, 'Returned to Brewery', { location: seed ? seed.location : 'Brewery', beer: seed ? seed.beer : 'Empty' });
+    k.location = seed ? seed.location : 'Brewery';
+    k.beer = seed ? seed.beer : 'Empty';
   }
   saveOrders();
   saveKegs();
