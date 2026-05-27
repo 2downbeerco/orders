@@ -4742,12 +4742,13 @@ function pageInvoicing() {
       <td style="font-family:monospace;font-size:13px;font-weight:700;text-align:right;color:${svcFinal<0?'var(--red)':'var(--text)'}">
         ₹${fmt2(svcFinal)}
       </td>
+      ${invEntityTab==='SAGA' ? `
       <td style="font-family:monospace;font-size:13px;text-align:right;color:var(--muted)">
         ${isSaga ? `₹${fmt2(gstAmt)} <span style="font-size:10px">(18%)</span>` : '—'}
       </td>
       <td style="font-family:monospace;font-size:13px;font-weight:700;text-align:right">
         ${netOfGST !== null ? `₹${fmt2(netOfGST)}` : '—'}
-      </td>
+      </td>` : ''}
       <td>
         <button class="btn btn-primary btn-sm" onclick="saveInvRow('${o.id}')">Save</button>
       </td>
@@ -4786,7 +4787,7 @@ function pageInvoicing() {
       <div style="margin-left:auto;font-size:12px;color:var(--muted)">MRP = roundup(₹134.4 × 1.02 × litres) · SAGA service includes 18% GST</div>
     </div>
     ${entityTabBar}
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:${invEntityTab==='SAGA'?'repeat(4,1fr)':'repeat(2,1fr)'};gap:12px;margin-bottom:20px;max-width:${invEntityTab==='SAGA'?'100%':'500px'}">
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
         <div style="font-size:20px;font-weight:700">₹${totalMrpFinal.toLocaleString('en-IN')}</div>
@@ -4795,6 +4796,7 @@ function pageInvoicing() {
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Service Total</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalSvcFinal)}</div>
       </div>
+      ${invEntityTab==='SAGA' ? `
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">GST Total</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalGst)}</div>
@@ -4802,7 +4804,7 @@ function pageInvoicing() {
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Net of GST</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalNetOfGST)}</div>
-      </div>
+      </div>` : ''}
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
@@ -4815,8 +4817,9 @@ function pageInvoicing() {
             <th style="text-align:right">Service Amount</th>
             <th style="text-align:right">Svc Discount</th>
             <th style="text-align:right">Final Service</th>
+            ${invEntityTab==='SAGA' ? `
             <th style="text-align:right">GST (18%)</th>
-            <th style="text-align:right">Net of GST</th>
+            <th style="text-align:right">Net of GST</th>` : ''}
             <th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
