@@ -3944,7 +3944,7 @@ function filterReturnSuggestions(val) {
 
   const kegsOut = kegs.filter(k => k.location !== 'Brewery' && !k.missing);
   const matches = kegsOut
-    .filter(k => !returnSelected.has(k.kegNo) && k.kegNo.toLowerCase().startsWith(q))
+    .filter(k => !returnSelected.has(k.kegNo) && k.kegNo.toLowerCase().includes(q))
     .slice(0, 10);
 
   if (matches.length === 0) { box.style.display = 'none'; return; }
