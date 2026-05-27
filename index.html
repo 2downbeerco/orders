@@ -3495,13 +3495,12 @@ function toggleOrderExpand(id) {
 }
 
 // ── New Order ─────────────────────────────────────────────────────────────
-let newOrderState = { barId:'', deliveryDate:today(), tpTotal:'', items:[{beer:'BB',size:20,qty:1}], notes:'' };
-let editOrderId = null; // null = new order, string = editing existing
+let newOrderState = { barId:'', barInputVal:'', deliveryDate:today(), tpTotal:'', items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}], notes:'' };
+let editOrderId = null;
 
 function pageNewOrder() {
   const activeBars = bars.filter(b=>!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
-  const barDatalist = activeBars.map(b=>`<option value="${b.barName} (${b.area})" data-id="${b.id}">${b.barName} (${b.area})</option>`).join('');
-
+  const barDatalist = activeBars.map(b=>`<option value="${b.barName} (${b.area})">${b.barName} (${b.area})</option>`).join('');
   const selectedBar = newOrderState.barId ? bars.find(x=>x.id==newOrderState.barId) : null;
   const barInfo = selectedBar
     ? `<div class="info-box"><b style="color:var(--text)">${cleanEntity(selectedBar.entity)}</b><br>${selectedBar.area} · Lic #${selectedBar.licNo} (${selectedBar.licType})</div>`
@@ -3531,6 +3530,13 @@ function pageNewOrder() {
       </div>
     </div>`).join('');
 
+  const tp = Number(newOrderState.tpTotal)||0;
+  const orderedTotal = newOrderState.items.reduce((s,i)=>s+i.qty,0);
+  const mismatchBanner = tp > 0 && orderedTotal > 0 && tp !== orderedTotal
+    ? `<div style="padding:10px 14px;background:rgba(220,38,38,0.07);border:1px solid rgba(220,38,38,0.2);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--red)">
+        ⚠ TP Qty (${tp}) ≠ Order Qty (${orderedTotal})
+      </div>` : '';
+
   return `
     <div style="max-width:720px">
       ${editOrderId ? `<div style="padding:10px 14px;background:rgba(88,166,255,0.1);border:1px solid var(--blue);border-radius:6px;margin-bottom:16px;font-size:12px;color:var(--blue)">✎ Editing existing order — changes will overwrite the original</div>` : ''}
@@ -3555,23 +3561,20 @@ function pageNewOrder() {
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
           <label class="lbl" style="color:var(--orange)">Total TP Qty (kegs on Transport Pass)</label>
           <div style="display:flex;align-items:center;gap:14px">
-            <input type="number" min="0" class="inp" style="width:120px;border-color:var(--orange);font-size:20px;font-weight:700;text-align:center" 
-              value="${newOrderState.tpTotal}" 
-              oninput="newOrderState.tpTotal=this.value" 
+            <input type="number" min="0" class="inp" style="width:120px;border-color:var(--orange);font-size:20px;font-weight:700;text-align:center"
+              value="${newOrderState.tpTotal}"
+              oninput="newOrderState.tpTotal=this.value"
               placeholder="0">
             <div style="font-size:12px;color:var(--muted)">Total kegs that will appear on the TP document</div>
           </div>
         </div>` : ''}
       </div>
-
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div>
-            <div class="section-title" style="margin-bottom:4px">Order Items</div>
-            <div style="font-size:11px;color:var(--muted)">Order Qty = what the bar ordered</div>
-          </div>
+          <div class="section-title" style="margin-bottom:0">Order Items</div>
           <button class="btn btn-ghost" onclick="addItem()">+ Add Beer</button>
         </div>
+        ${mismatchBanner}
         ${itemRows}
         <div style="margin-top:14px">
           <label class="lbl">Notes / Special Instructions</label>
@@ -3585,8 +3588,8 @@ function pageNewOrder() {
     </div>`;
 }
 
-function addItem() { newOrderState.items.push({beer:'BB',size:20,qty:1}); renderPage(); }
-function removeItem(i) { newOrderState.items.splice(i,1); if(!newOrderState.items.length) newOrderState.items=[{beer:'BB',size:20,qty:1}]; renderPage(); }
+function addItem() { newOrderState.items.push({beer:BEERS.filter(b=>!b.inactive)[0]?.code||'BB',size:20,qty:1}); renderPage(); }
+function removeItem(i) { newOrderState.items.splice(i,1); if(!newOrderState.items.length) newOrderState.items=[{beer:BEERS.filter(b=>!b.inactive)[0]?.code||'BB',size:20,qty:1}]; renderPage(); }
 function updateItem(i,field,val) { newOrderState.items[i][field]=field==='beer'?val:Number(val); renderPage(); }
 
 function editOrder(id) {
@@ -3595,6 +3598,7 @@ function editOrder(id) {
   editOrderId = id;
   newOrderState = {
     barId: String(o.barId),
+    barInputVal: '',
     deliveryDate: o.deliveryDate,
     tpTotal: o.tpTotal||'',
     items: o.items.map(i=>({...i})),
@@ -3672,18 +3676,25 @@ function selectBarFromInput(val) {
 
 function cancelOrderEdit() {
   editOrderId = null;
-  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
+  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',tpOverride:false,items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
   goTo('new-order');
 }
 
 function submitOrder() {
   if (!newOrderState.barId) { alert('Please select a bar from the list.'); return; }
+  const tp = Number(newOrderState.tpTotal)||0;
+  const orderedTotal = newOrderState.items.reduce((s,i)=>s+Number(i.qty),0);
+  // Prompt if TP and order qty don't match
+  if (tp !== orderedTotal) {
+    const confirmed = confirm(`TP Qty (${tp}) doesn't match Order Qty (${orderedTotal}). Are you sure?`);
+    if (!confirmed) return;
+  }
   const existing = editOrderId ? orders.find(x=>x.id===editOrderId) : null;
   const order = {
     id: editOrderId || uid(),
     barId: Number(newOrderState.barId),
     deliveryDate: newOrderState.deliveryDate,
-    tpTotal: Number(newOrderState.tpTotal)||0,
+    tpTotal: tp,
     items: newOrderState.items.map(i=>({...i,size:Number(i.size),qty:Number(i.qty)})),
     notes: newOrderState.notes,
     status: existing ? existing.status : 'pending',
@@ -3696,7 +3707,6 @@ function submitOrder() {
   }
   saveOrders();
   editOrderId = null;
-  // Stay on New Order tab, reset form
   newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
   showToast();
   _renderPage();
