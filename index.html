@@ -4543,7 +4543,7 @@ function pageRateCard() {
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}</div>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-          ${rates.__entity__ ? `<span style="font-size:11px;color:var(--muted)">${rates.__entity__}</span>` : ''}
+          <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;${entity==='SAGA GYPSY BEER PROJECT'?'background:rgba(88,166,255,0.1);color:#58A6FF':'background:rgba(245,166,35,0.1);color:var(--accent)'}">${entity==='SAGA GYPSY BEER PROJECT'?'SAGA':'TWO DOWN'}</span>
           <div style="font-size:16px;color:var(--muted)">${isExpanded ? '▲' : '▼'}</div>
         </div>
       </div>
@@ -4600,6 +4600,7 @@ function saveRateCardBar(barId) {
 // invData: { orderId: { mrpDiscount, svcDiscount } }
 let invData = {};
 let invWeekOffset = 0;
+let invEntityTab = 'SAGA'; // 'SAGA' or 'TWODOWN'
 
 async function saveInvData() {
   localStorage.setItem('2down_inv_data', JSON.stringify(invData));
@@ -4637,8 +4638,28 @@ function pageInvoicing() {
   // Filter orders for this week by delivery date
   const weekOrders = orders.filter(o=>{
     const d = new Date(o.deliveryDate);
-    return d >= wStart && d < wEnd;
+    if (!(d >= wStart && d < wEnd)) return false;
+    // Exclude Patel Provision Stores
+    const b = bars.find(x=>x.id===o.barId)||{barName:''};
+    if (b.barName.toLowerCase().includes('patel provision')) return false;
+    return true;
   }).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate));
+
+  // Entity tabs
+  const entityTabBar = `
+    <div style="display:flex;gap:2px;background:var(--hover);border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px">
+      <button class="btn btn-sm ${invEntityTab==='SAGA'?'btn-primary':'btn-ghost'}"
+        onclick="invEntityTab='SAGA';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">SAGA GYPSY</button>
+      <button class="btn btn-sm ${invEntityTab==='TWODOWN'?'btn-primary':'btn-ghost'}"
+        onclick="invEntityTab='TWODOWN';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">TWO DOWN</button>
+    </div>`;
+
+  // Filter by entity tab
+  const tabOrders = weekOrders.filter(o => {
+    const b = bars.find(x=>x.id===o.barId)||{};
+    const entity = (rateCard[b.id]||{}).__entity__ || 'SAGA GYPSY BEER PROJECT';
+    return invEntityTab === 'SAGA' ? entity === 'SAGA GYPSY BEER PROJECT' : entity === 'TWO DOWN HOSPITALITY';
+  });
 
   if (weekOrders.length === 0) {
     return `
@@ -4650,11 +4671,12 @@ function pageInvoicing() {
         <button class="btn btn-ghost" onclick="invWeekOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
         ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}
       </div>
+      ${entityTabBar}
       <div class="empty">No orders for this week</div>`;
   }
 
-  // Build invoice rows
-  const rows = weekOrders.map(o => {
+  // Build invoice rows from tabOrders
+  const rows = tabOrders.map(o => {
     const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown'};
     const rc = rateCard[b.id] || {};
     const entity = rc.__entity__ || 'SAGA GYPSY BEER PROJECT';
@@ -4734,7 +4756,7 @@ function pageInvoicing() {
 
   // Totals
   let totalMrpFinal=0, totalSvcFinal=0, totalGst=0, totalNetOfGST=0;
-  weekOrders.forEach(o=>{
+  tabOrders.forEach(o=>{
     const b = bars.find(x=>x.id===o.barId)||{};
     const rc = rateCard[b.id]||{};
     const entity = rc.__entity__||'SAGA GYPSY BEER PROJECT';
@@ -4754,7 +4776,7 @@ function pageInvoicing() {
   const fmt2tot = n => n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   return `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="invWeekOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
       <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="invWeekOffset=parseInt(this.value);_renderPage()">
         ${weekOpts||`<option value="0">${weekLabel}</option>`}
@@ -4763,6 +4785,7 @@ function pageInvoicing() {
       ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}
       <div style="margin-left:auto;font-size:12px;color:var(--muted)">MRP = roundup(₹134.4 × 1.02 × litres) · SAGA service includes 18% GST</div>
     </div>
+    ${entityTabBar}
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
