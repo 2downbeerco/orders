@@ -3620,7 +3620,7 @@ function pageKegging() {
     summary[i.beer]._50 += i.size===50?i.qty:0;
   }));
 
-  const sumRows = BEERS
+  const sumRows = BEERS.filter(b=>!b.inactive)
     .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
     .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
     .map(({b,s})=>{
@@ -3633,14 +3633,14 @@ function pageKegging() {
       </tr>`;
     }).join('');
 
-  const beerCols = BEERS.map(b=>`<th colspan="2" style="text-align:center">${badge(b.code,b.color)}</th>`).join('');
-  const beerSubCols = BEERS.map(()=>`
+  const beerCols = BEERS.filter(b=>!b.inactive).map(b=>`<th colspan="2" style="text-align:center">${badge(b.code,b.color)}</th>`).join('');
+  const beerSubCols = BEERS.filter(b=>!b.inactive).map(()=>`
     <th style="font-size:9px;padding-top:2px">20L</th>
     <th style="font-size:9px;padding-top:2px">50L</th>`).join('');
 
   const detailRows = filtered.map(o=>{
     const b = bars.find(x=>x.id===o.barId)||{barName:'?',area:''};
-    const cols = BEERS.map(beer=>{
+    const cols = BEERS.filter(b=>!b.inactive).map(beer=>{
       const q20=(o.items||[]).find(i=>i.beer===beer.code&&i.size===20)?.qty||0;
       const q50=(o.items||[]).find(i=>i.beer===beer.code&&i.size===50)?.qty||0;
       return `
