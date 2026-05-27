@@ -4717,7 +4717,10 @@ function saveRateCardBar(barId) {
 // invData: { orderId: { mrpDiscount, svcDiscount } }
 let invData = {};
 let invWeekOffset = 0;
-let invEntityTab = 'SAGA'; // 'SAGA' or 'TWODOWN'
+let invEntityTab = 'SAGA'; // 'SAGA', 'TWODOWN', or 'PERBAR'
+let invPerBarExpanded = null;
+let invView = 'week'; // 'week' or 'month' — shared across all tabs
+let invMonthOffset = 0;
 
 async function saveInvData() {
   localStorage.setItem('2down_inv_data', JSON.stringify(invData));
@@ -4726,12 +4729,27 @@ async function saveInvData() {
 
 function pageInvoicing() {
   const now = new Date();
+
+  // Shared view toggle
+  const viewToggle = `<div style="display:flex;gap:2px;background:var(--hover);border-radius:8px;padding:3px">
+    <button class="btn btn-sm ${invView==='week'?'btn-primary':'btn-ghost'}" onclick="invView='week';_renderPage()" style="border:none;padding:5px 14px;font-size:12px">Week</button>
+    <button class="btn btn-sm ${invView==='month'?'btn-primary':'btn-ghost'}" onclick="invView='month';_renderPage()" style="border:none;padding:5px 14px;font-size:12px">Month</button>
+  </div>`;
+
+  // Week setup
   const wStart = new Date(now); wStart.setHours(0,0,0,0);
   wStart.setDate(now.getDate() - ((now.getDay()+6)%7) + (invWeekOffset*7));
   const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+7);
   const wEndDisplay = new Date(wEnd); wEndDisplay.setDate(wEnd.getDate()-1);
   const isCurrentWeek = invWeekOffset === 0;
   const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
+
+  // Month setup
+  const selDate = new Date(now.getFullYear(), now.getMonth() + invMonthOffset, 1);
+  const mStart = new Date(selDate.getFullYear(), selDate.getMonth(), 1);
+  const mEnd = new Date(selDate.getFullYear(), selDate.getMonth()+1, 1);
+  const isCurrentMonth = invMonthOffset === 0;
+  const monthLabel = selDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
 
   // Week options from earliest order
   const allWeekStarts = [];
@@ -4752,11 +4770,24 @@ function pageInvoicing() {
     return `<option value="${offset}" ${offset===invWeekOffset?'selected':''}>${lbl}</option>`;
   }).join('');
 
-  // Filter orders for this week by delivery date
-  const weekOrders = orders.filter(o=>{
+  // Period navigator
+  const periodNav = invView === 'week'
+    ? `<button class="btn btn-ghost" onclick="invWeekOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
+       <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="invWeekOffset=parseInt(this.value);_renderPage()">
+         ${weekOpts||`<option value="0">${weekLabel}</option>`}
+       </select>
+       <button class="btn btn-ghost" onclick="invWeekOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
+       ${!isCurrentWeek?`<button class="btn btn-ghost btn-sm" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}`
+    : `<button class="btn btn-ghost" onclick="invMonthOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
+       <div style="font-weight:600;font-size:14px;min-width:150px;text-align:center">${monthLabel}</div>
+       <button class="btn btn-ghost" onclick="invMonthOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentMonth?'opacity:0.3;cursor:default':''}">&#8250;</button>
+       ${!isCurrentMonth?`<button class="btn btn-ghost btn-sm" onclick="invMonthOffset=0;_renderPage()">This Month</button>`:''}`;
+
+  // Filter orders by period, exclude Patel
+  const filteredOrders = orders.filter(o=>{
     const d = new Date(o.deliveryDate);
-    if (!(d >= wStart && d < wEnd)) return false;
-    // Exclude Patel Provision Stores
+    const inPeriod = invView === 'week' ? (d >= wStart && d < wEnd) : (d >= mStart && d < mEnd);
+    if (!inPeriod) return false;
     const b = bars.find(x=>x.id===o.barId)||{barName:''};
     if (b.barName.toLowerCase().includes('patel provision')) return false;
     return true;
@@ -4769,30 +4800,33 @@ function pageInvoicing() {
         onclick="invEntityTab='SAGA';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">SAGA GYPSY</button>
       <button class="btn btn-sm ${invEntityTab==='TWODOWN'?'btn-primary':'btn-ghost'}"
         onclick="invEntityTab='TWODOWN';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">TWO DOWN</button>
+      <button class="btn btn-sm ${invEntityTab==='PERBAR'?'btn-primary':'btn-ghost'}"
+        onclick="invEntityTab='PERBAR';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Per Bar</button>
     </div>`;
 
-  // Filter by entity tab
-  const tabOrders = weekOrders.filter(o => {
+  // Route to Per-Bar view
+  if (invEntityTab === 'PERBAR') {
+    return renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, filteredOrders, entityTabBar, viewToggle, periodNav, monthLabel, isCurrentMonth);
+  }
+
+  const tabOrders = filteredOrders.filter(o => {
     const b = bars.find(x=>x.id===o.barId)||{};
     const entity = (rateCard[b.id]||{}).__entity__ || 'SAGA GYPSY BEER PROJECT';
     return invEntityTab === 'SAGA' ? entity === 'SAGA GYPSY BEER PROJECT' : entity === 'TWO DOWN HOSPITALITY';
   });
 
-  if (weekOrders.length === 0) {
+  const periodLabel = invView === 'week' ? weekLabel : monthLabel;
+
+  if (filteredOrders.length === 0) {
     return `
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
-        <button class="btn btn-ghost" onclick="invWeekOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
-        <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="invWeekOffset=parseInt(this.value);_renderPage()">
-          ${weekOpts||`<option value="0">${weekLabel}</option>`}
-        </select>
-        <button class="btn btn-ghost" onclick="invWeekOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
-        ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        ${periodNav}
+        <div style="margin-left:auto">${viewToggle}</div>
       </div>
       ${entityTabBar}
-      <div class="empty">No orders for this week</div>`;
+      <div class="empty">No orders for this ${invView}</div>`;
   }
 
-  // Build invoice rows from tabOrders
   const rows = tabOrders.map(o => {
     const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown'};
     const rc = rateCard[b.id] || {};
@@ -4895,13 +4929,11 @@ function pageInvoicing() {
 
   return `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-      <button class="btn btn-ghost" onclick="invWeekOffset--;_renderPage()" style="padding:6px 12px;font-size:16px">&#8249;</button>
-      <select class="inp" style="width:210px;font-weight:600;font-size:13px" onchange="invWeekOffset=parseInt(this.value);_renderPage()">
-        ${weekOpts||`<option value="0">${weekLabel}</option>`}
-      </select>
-      <button class="btn btn-ghost" onclick="invWeekOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentWeek?'opacity:0.3;cursor:default':''}">&#8250;</button>
-      ${!isCurrentWeek?`<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="invWeekOffset=0;_renderPage()">This Week</button>`:''}
-      <div style="margin-left:auto;font-size:12px;color:var(--muted)">MRP = roundup(₹134.4 × 1.02 × litres) · SAGA service includes 18% GST</div>
+      ${periodNav}
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        ${viewToggle}
+        <span style="font-size:12px;color:var(--muted)">MRP = roundup(₹134.4 × 1.02 × litres) · SAGA service includes 18% GST</span>
+      </div>
     </div>
     ${entityTabBar}
     <div style="display:grid;grid-template-columns:${invEntityTab==='SAGA'?'repeat(4,1fr)':'repeat(2,1fr)'};gap:12px;margin-bottom:20px;max-width:${invEntityTab==='SAGA'?'100%':'500px'}">
@@ -4943,6 +4975,135 @@ function pageInvoicing() {
         </table>
       </div>
     </div>`;
+}
+
+function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entityTabBar, viewToggle, periodNav, monthLabel, isCurrentMonth) {
+  const now = new Date();
+
+  // Summary totals
+  let grandMRP = 0, grandSvc = 0;
+  activeOrders.forEach(o => {
+    const b = bars.find(x=>x.id===o.barId)||{};
+    const rc = rateCard[b.id]||{};
+    const totalLitres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+    grandMRP += Math.ceil(MRP_PER_LITRE*1.02*totalLitres) - (Number((invData[o.id]||{}).mrpDiscount)||0);
+    let svcGross=0;
+    (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+    grandSvc += svcGross - (Number((invData[o.id]||{}).svcDiscount)||0);
+  });
+
+  const barCards = Object.entries((() => {
+    const m = {};
+    activeOrders.forEach(o => { if(!m[o.barId]) m[o.barId]=[]; m[o.barId].push(o); });
+    return m;
+  })())
+    .sort(([,a],[,b]) => {
+      const bA = bars.find(x=>x.id==a[0].barId)||{barName:''};
+      const bB = bars.find(x=>x.id==b[0].barId)||{barName:''};
+      return bA.barName.localeCompare(bB.barName);
+    })
+    .map(([barId, bOrders]) => {
+      const b = bars.find(x=>x.id==barId)||{barName:'Unknown',area:''};
+      const rc = rateCard[b.id]||{};
+      const isOpen = invPerBarExpanded === String(barId);
+
+      // Bar-level totals
+      let barMRP=0, barSvc=0, barKegs=0;
+      bOrders.forEach(o => {
+        const totalLitres=(o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+        const mrpGross=Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
+        const mrpDisc=Number((invData[o.id]||{}).mrpDiscount)||0;
+        barMRP += mrpGross-mrpDisc;
+        let svcGross=0;
+        (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+        barSvc += svcGross-(Number((invData[o.id]||{}).svcDiscount)||0);
+        barKegs += (o.items||[]).reduce((s,i)=>s+i.qty,0);
+      });
+
+      // Group by delivery date
+      const dateMap = {};
+      bOrders.forEach(o => {
+        if (!dateMap[o.deliveryDate]) dateMap[o.deliveryDate] = [];
+        dateMap[o.deliveryDate].push(o);
+      });
+
+      const dateBlocks = Object.entries(dateMap).sort(([a],[b])=>a.localeCompare(b)).map(([date, dOrders]) => {
+        const dateRows = dOrders.map(o => {
+          const inv = invData[o.id]||{};
+          const totalLitres=(o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+          const mrpGross=Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
+          const mrpDisc=Number(inv.mrpDiscount)||0;
+          const mrpFinal=mrpGross-mrpDisc;
+          let svcGross=0;
+          (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+          const svcDisc=Number(inv.svcDiscount)||0;
+          const svcFinal=svcGross-svcDisc;
+          const itemStr=(o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+          return `<tr>
+            <td style="font-size:12px;color:var(--muted)">${itemStr}</td>
+            <td style="font-family:monospace;font-size:12px;text-align:right">${totalLitres}L</td>
+            <td style="font-family:monospace;font-size:12px;text-align:right">₹${mrpGross.toLocaleString('en-IN')}</td>
+            <td style="text-align:right"><input type="number" min="0" class="inp" style="width:80px;font-size:11px;padding:3px 6px;text-align:right" value="${mrpDisc||''}" placeholder="0" data-inv-mrpdisc="${o.id}"></td>
+            <td style="font-family:monospace;font-size:12px;font-weight:600;text-align:right">₹${mrpFinal.toLocaleString('en-IN')}</td>
+            <td style="font-family:monospace;font-size:12px;text-align:right">${svcGross>0?'₹'+svcGross.toLocaleString('en-IN'):'—'}</td>
+            <td style="text-align:right"><input type="number" min="0" class="inp" style="width:80px;font-size:11px;padding:3px 6px;text-align:right" value="${svcDisc||''}" placeholder="0" data-inv-svcdisc="${o.id}"></td>
+            <td style="font-family:monospace;font-size:12px;font-weight:600;text-align:right">${svcFinal>0?'₹'+svcFinal.toLocaleString('en-IN'):'—'}</td>
+            <td><button class="btn btn-primary btn-sm" onclick="saveInvRow('${o.id}')">Save</button></td>
+          </tr>`;
+        }).join('');
+
+        return `<div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px;padding:6px 0;border-bottom:1px solid var(--border)">${fmtDate(date)}</div>
+          <div class="tbl-wrap">
+            <table class="tbl" style="font-size:12px">
+              <thead><tr>
+                <th>Items</th><th style="text-align:right">Volume</th>
+                <th style="text-align:right">MRP Amt</th><th style="text-align:right">MRP Disc</th><th style="text-align:right">Final MRP</th>
+                <th style="text-align:right">Svc Amt</th><th style="text-align:right">Svc Disc</th><th style="text-align:right">Final Svc</th>
+                <th></th>
+              </tr></thead>
+              <tbody>${dateRows}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;cursor:pointer"
+          onclick="invPerBarExpanded=invPerBarExpanded==='${barId}'?null:'${barId}';_renderPage()">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px">${b.barName}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area} · ${barKegs} keg${barKegs!==1?'s':''}</div>
+          </div>
+          <div style="display:flex;gap:20px;text-align:right;flex-wrap:wrap">
+            <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">MRP</div>
+              <div style="font-family:monospace;font-size:13px;font-weight:600">₹${barMRP.toLocaleString('en-IN')}</div></div>
+            <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Service</div>
+              <div style="font-family:monospace;font-size:13px;font-weight:600">${barSvc>0?'₹'+barSvc.toLocaleString('en-IN'):'—'}</div></div>
+          </div>
+          <div style="font-size:16px;color:var(--muted)">${isOpen?'▲':'▼'}</div>
+        </div>
+        ${isOpen ? `<div style="padding:0 18px 18px;border-top:1px solid var(--border)">${dateBlocks}</div>` : ''}
+      </div>`;
+    }).join('') || `<div class="empty">No orders for this period</div>`;
+
+  return `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      ${periodNav}
+      <div style="margin-left:auto">${viewToggle}</div>
+    </div>
+    ${entityTabBar}
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;max-width:500px">
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total MRP</div>
+        <div style="font-size:18px;font-weight:700">₹${grandMRP.toLocaleString('en-IN')}</div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total Service</div>
+        <div style="font-size:18px;font-weight:700">₹${grandSvc.toLocaleString('en-IN')}</div>
+      </div>
+    </div>
+    ${barCards}`;
 }
 
 function saveInvRow(orderId) {
