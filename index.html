@@ -4461,7 +4461,7 @@ function pageRateCard() {
     const isExpanded = rcExpandedBar === b.id;
     const isEditing = rcEditBarId === b.id;
 
-    const beerRows = BEERS.map(beer => {
+    const beerRows = BEERS.filter(beer => !beer.inactive).map(beer => {
       const r = rates[beer.code] || {};
       const total = r.rate ? Number(r.rate) : null;
       const svc = total ? (total - MRP_PER_LITRE).toFixed(2) : null;
