@@ -3894,21 +3894,19 @@ function pageKegs() {
     : `<span style="color:var(--muted);font-size:13px">No kegs selected yet</span>`;
 
   // datalist options — only kegs out, not already selected
-  const datalistOpts = kegsOut
-    .filter(k => !returnSelected.has(k.kegNo))
-    .map(k => `<option value="${k.kegNo}">${k.kegNo} — ${k.size}L — ${k.location}</option>`)
-    .join('');
+  const kegsAvailable = kegsOut.filter(k => !returnSelected.has(k.kegNo));
 
   const returnSection = `
     <div class="card" style="margin-bottom:20px">
       <div class="section-title">Return Kegs to Brewery</div>
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
-        <div>
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;position:relative">
+        <div style="position:relative">
           <label class="lbl">Type keg number</label>
           <input id="return-keg-inp" class="inp" style="width:220px" placeholder="e.g. M5, 20C1-3…"
-            list="return-keg-list" autocomplete="off"
-            onkeydown="if(event.key==='Enter'){addReturnKeg();event.preventDefault();}">
-          <datalist id="return-keg-list">${datalistOpts}</datalist>
+            autocomplete="off"
+            oninput="filterReturnSuggestions(this.value)"
+            onkeydown="if(event.key==='Enter'){addReturnKeg();event.preventDefault();}if(event.key==='Escape'){closeReturnSuggestions();}">
+          <div id="return-suggestions" style="display:none;position:absolute;top:100%;left:0;width:320px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.1);z-index:100;max-height:240px;overflow-y:auto"></div>
         </div>
         <button class="btn btn-primary" onclick="addReturnKeg()">+ Add</button>
       </div>
@@ -3936,6 +3934,41 @@ function pageKegs() {
         </table>
       </div>
     </div>`;
+}
+
+function filterReturnSuggestions(val) {
+  const box = document.getElementById('return-suggestions');
+  if (!box) return;
+  const q = val.trim().toLowerCase();
+  if (!q) { box.style.display = 'none'; return; }
+
+  const kegsOut = kegs.filter(k => k.location !== 'Brewery' && !k.missing);
+  const matches = kegsOut
+    .filter(k => !returnSelected.has(k.kegNo) && k.kegNo.toLowerCase().startsWith(q))
+    .slice(0, 10);
+
+  if (matches.length === 0) { box.style.display = 'none'; return; }
+
+  box.innerHTML = matches.map(k => `
+    <div onclick="selectReturnKeg('${k.kegNo}')"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <span style="font-weight:700;font-family:monospace">${k.kegNo}</span>
+      <span style="color:var(--muted);margin-left:8px">${k.size}L — ${k.location}</span>
+    </div>`).join('');
+  box.style.display = 'block';
+}
+
+function selectReturnKeg(kegNo) {
+  const inp = document.getElementById('return-keg-inp');
+  if (inp) inp.value = kegNo;
+  closeReturnSuggestions();
+  addReturnKeg();
+}
+
+function closeReturnSuggestions() {
+  const box = document.getElementById('return-suggestions');
+  if (box) box.style.display = 'none';
 }
 
 function addReturnKeg() {
