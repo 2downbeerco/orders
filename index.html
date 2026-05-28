@@ -3960,7 +3960,16 @@ function pageKegs() {
       <td style="font-size:13px">${k.size}L</td>
       <td style="font-size:13px;color:var(--muted)">${k.make}</td>
       <td style="font-weight:${k.location==='Brewery'?'400':'600'};color:${k.location==='Brewery'?'var(--green)':'var(--text)'}">${k.location}</td>
-      <td style="font-size:13px">${k.beer === 'Empty' ? `<span style="color:var(--muted)">Empty</span>` : `<span style="font-weight:600">${k.beer}</span>`}</td>
+      <td style="font-size:13px">
+        <input class="inp" style="width:90px;font-size:12px;padding:4px 8px;${k.beer==='Empty'?'color:var(--muted)':''}"
+          value="${k.beer}"
+          list="beer-list-${k.kegNo}"
+          onchange="updateKegBeer('${k.kegNo}',this.value)">
+        <datalist id="beer-list-${k.kegNo}">
+          <option value="Empty">
+          ${breweryBeers.filter(bb=>!bb.inactive).map(bb=>`<option value="${bb.beer}${bb.batch}">`).join('')}
+        </datalist>
+      </td>
       <td>
         <select class="inp" style="font-size:12px;padding:5px 8px;width:180px" onchange="updateKegLocation('${k.kegNo}',this.value)">
           <option value="${k.location}" selected>${k.location}</option>
@@ -4019,13 +4028,12 @@ function pageKegs() {
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;position:relative">
         <div style="position:relative">
           <label class="lbl">Type keg number</label>
-          <input id="return-keg-inp" class="inp" style="width:220px" placeholder="e.g. M5, 20C1-3…"
+          <input id="return-keg-inp" class="inp" style="width:260px" placeholder="e.g. M5, 20C1-3…"
             autocomplete="off"
             oninput="filterReturnSuggestions(this.value)"
             onkeydown="if(event.key==='Enter'){addReturnKeg();event.preventDefault();}if(event.key==='Escape'){closeReturnSuggestions();}">
           <div id="return-suggestions" style="display:none;position:absolute;top:100%;left:0;width:320px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.1);z-index:100;max-height:240px;overflow-y:auto"></div>
         </div>
-        <button class="btn btn-primary" onclick="addReturnKeg()">+ Add</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;min-height:32px;margin-bottom:${returnCount>0?'14':'0'}px">${returnTags}</div>
       ${returnCount > 0 ? `<div style="padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
@@ -4137,6 +4145,13 @@ function removeBreweryBeer(idx) {
   breweryBeers.splice(idx, 1);
   saveBreweryBeers();
   renderPage();
+}
+
+function updateKegBeer(kegNo, beer) {
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!k) return;
+  k.beer = beer.trim() || 'Empty';
+  saveKegs();
 }
 
 function updateKegLocation(kegNo, newLocation) {
@@ -5168,11 +5183,11 @@ function pageBars() {
     }
 
     return `<tr data-search='${b.barName} ${b.area||""}' style="background:${checked?'rgba(218,54,51,0.07)':b.inactive?'rgba(139,148,158,0.05)':''}">
-      <td class="sticky-col" style="width:36px;text-align:center">
+      <td class="sticky-col" style="width:36px;left:0;text-align:center">
         <input type="checkbox" ${checked?'checked':''} onchange="toggleBarSelect(${b.id},this.checked)"
           style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
       </td>
-      <td class="sticky-col" style="font-weight:600;${b.inactive?'opacity:0.45':''}">
+      <td class="sticky-col" style="left:36px;font-weight:600;${b.inactive?'opacity:0.45':''}">
         ${b.barName}
         ${b.inactive?`<span style="font-size:10px;color:var(--muted);margin-left:6px;font-weight:400">INACTIVE</span>`:''}
       </td>
@@ -5239,7 +5254,7 @@ function pageBars() {
               <input type="checkbox" ${allSelected?'checked':''} onchange="toggleAllBars(this.checked,${JSON.stringify(allFilteredIds)})"
                 style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
             </th>
-            <th class="sticky-col" style="padding-left:14px"></th><th class="sticky-col">Bar</th><th>Legal Entity</th><th>Area</th><th>Lic No</th><th>Type</th><th></th>
+            <th style="width:36px;padding:0"></th><th>Bar</th><th>Legal Entity</th><th>Area</th><th>Lic No</th><th>Type</th><th></th>
           </tr></thead>
           <tbody id="bars-tbody">${rows}</tbody>
         </table>
