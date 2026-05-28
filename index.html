@@ -5183,11 +5183,11 @@ function pageBars() {
     }
 
     return `<tr data-search='${b.barName} ${b.area||""}' style="background:${checked?'rgba(218,54,51,0.07)':b.inactive?'rgba(139,148,158,0.05)':''}">
-      <td class="sticky-col" style="width:36px;left:0;text-align:center">
+      <td style="width:36px;min-width:36px;max-width:36px;text-align:center;padding:0 8px;box-sizing:border-box">
         <input type="checkbox" ${checked?'checked':''} onchange="toggleBarSelect(${b.id},this.checked)"
           style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
       </td>
-      <td class="sticky-col" style="left:36px;font-weight:600;${b.inactive?'opacity:0.45':''}">
+      <td style="font-weight:600;${b.inactive?'opacity:0.45':''}">
         ${b.barName}
         ${b.inactive?`<span style="font-size:10px;color:var(--muted);margin-left:6px;font-weight:400">INACTIVE</span>`:''}
       </td>
@@ -5254,7 +5254,7 @@ function pageBars() {
               <input type="checkbox" ${allSelected?'checked':''} onchange="toggleAllBars(this.checked,${JSON.stringify(allFilteredIds)})"
                 style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
             </th>
-            <th style="width:36px;padding:0"></th><th>Bar</th><th>Legal Entity</th><th>Area</th><th>Lic No</th><th>Type</th><th></th>
+            <th>Bar</th><th>Legal Entity</th><th>Area</th><th>Lic No</th><th>Type</th><th></th>
           </tr></thead>
           <tbody id="bars-tbody">${rows}</tbody>
         </table>
