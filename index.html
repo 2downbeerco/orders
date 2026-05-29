@@ -3409,7 +3409,7 @@ function pageOrders() {
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:12px">
       <span>${filtered.length} order${filtered.length!==1?'s':''} · Click any row to assign kegs</span>
-      <button class="btn btn-ghost btn-sm" onclick="printOrders()" style="margin-left:auto">⎙ Print</button>
+      <button class="btn btn-ghost btn-sm" onclick="printOrders()" style="margin-left:auto">⎙ View Table</button>
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
@@ -3452,14 +3452,14 @@ function printOrders() {
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal-box" style="max-width:380px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-          <div style="font-size:16px;font-weight:700">Print Orders</div>
+          <div style="font-size:16px;font-weight:700">View Orders</div>
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
         </div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Select a delivery date to print:</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Select a delivery date to view:</div>
         ${dateOptions || '<div style="color:var(--muted);font-size:13px">No orders this week</div>'}
         <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
           <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="doPrintOrders()">⎙ Print</button>
+          <button class="btn btn-primary" onclick="doPrintOrders()">View</button>
         </div>
       </div>
     </div>`;
@@ -3526,7 +3526,6 @@ function doPrintOrders() {
   w.document.write(printHtml);
   w.document.close();
   w.focus();
-  setTimeout(() => w.print(), 500);
 }
 
 function startKegFill(orderId, size) {
