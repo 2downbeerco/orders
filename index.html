@@ -2695,7 +2695,11 @@ async function loadData() {
     }
 
     if (remoteBars.length > 0) {
-      bars = remoteBars;
+      // Merge: start with seed BARS, overlay with any Supabase updates
+      const barMap = {};
+      [...BARS].forEach(b => barMap[b.id] = {...b});
+      remoteBars.forEach(b => { if (b && b.id) barMap[b.id] = b; });
+      bars = Object.values(barMap).sort((a,b) => a.id - b.id);
       localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
     } else if (bars.length > 0) {
       await Promise.all(bars.map(b => sbUpsert('bars', String(b.id), b)));
