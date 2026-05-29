@@ -3165,7 +3165,7 @@ function pageDashboard() {
         [`${shortMonth} Orders`,  monthOrders.length, '#F5C842'],
         ['Kegs Shipped',          monthKegs,          '#E87C3E'],
         ['Litres Shipped',        monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0)+'L', '#A3C96B'],
-        ['Delivery Weeks',        new Set(monthOrders.map(o=>{ const d=new Date(o.deliveryDate); const mon=new Date(d); mon.setDate(d.getDate()-((d.getDay()+6)%7)); return mon.toISOString().slice(0,10); })).size, '#58A6FF'],
+        ['Delivery Weeks',        (() => { let count=0, d=new Date(mStart); while(d<mEnd){ if(d.getDay()===4) count++; d.setDate(d.getDate()+1); } return count; })(), '#58A6FF'],
         ['Avg Kegs / Order',      monthOrders.length?Math.round(monthKegs/monthOrders.length):0, '#E87C3E'],
       ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
     </div>
