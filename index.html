@@ -2927,6 +2927,7 @@ function _renderPage() {
 let dashMonthOffset = 0;
 let dashView = 'week'; // 'week' or 'month'
 let dashWeekOffset = 0; // 0 = current week
+let dashExpandedBar = null;
 
 function pageActivity() {
   const actionColors = {
@@ -3019,21 +3020,40 @@ function pageDashboard() {
   const summary = makeSummary(dashView==='week' ? weekOrders : monthOrders);
 
   // Orders list
-  const makeOrderList = (orderList, emptyMsg) =>
-    orderList.slice().reverse().map(o=>{
-      const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown'};
-      const tot = o.items.reduce((s,i)=>s+i.qty,0);
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--hover)">
-        <div>
-          <div style="font-weight:600;font-size:14px">${b.barName}</div>
-          <div style="font-size:12px;color:var(--muted)">Delivery: ${fmtDate(o.deliveryDate)} · ${tot} keg${tot!==1?'s':''}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;color:var(--muted)">Ordered</div>
-          <div style="font-size:12px;color:var(--muted)">${fmtDate(o.createdAt)}</div>
-        </div>
-      </div>`;
-    }).join('') || `<div class="empty">${emptyMsg}</div>`;
+  const makeOrderList = (orderList, emptyMsg) => {
+    if (!orderList.length) return `<div class="empty">${emptyMsg}</div>`;
+    const barMap = {};
+    orderList.forEach(o => {
+      const bid = o.barId;
+      if (!barMap[bid]) barMap[bid] = { bar: bars.find(x=>x.id===bid)||{barName:'Unknown'}, orders:[] };
+      barMap[bid].orders.push(o);
+    });
+    return Object.values(barMap)
+      .sort((a,b) => a.bar.barName.localeCompare(b.bar.barName))
+      .map(({bar, orders: bOrders}) => {
+        const totalKegs = bOrders.reduce((s,o)=>s+(o.items||[]).reduce((ss,i)=>ss+i.qty,0),0);
+        const isOpen = dashExpandedBar === bar.id;
+        const deliveryRows = bOrders
+          .sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate))
+          .map(o => {
+            const kegs = (o.items||[]).reduce((s,i)=>s+i.qty,0);
+            const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+            return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
+              <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
+              <span style="flex:1;color:var(--text)">${items}</span>
+              <span style="font-weight:600;color:var(--orange)">${kegs} keg${kegs!==1?'s':''}</span>
+            </div>`;
+          }).join('');
+        return `<div style="border-bottom:1px solid var(--hover)">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;cursor:pointer"
+            onclick="dashExpandedBar=dashExpandedBar===${bar.id}?null:${bar.id};renderPage()">
+            <div style="font-weight:600;font-size:14px">${bar.barName}</div>
+            <span style="font-size:13px;font-weight:700;color:var(--orange)">${totalKegs} keg${totalKegs!==1?'s':''}</span>
+          </div>
+          ${isOpen ? `<div style="padding-bottom:10px">${deliveryRows}</div>` : ''}
+        </div>`;
+      }).join('');
+  };
 
   const beerSummaryRows = BEERS
     .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
