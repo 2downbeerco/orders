@@ -2590,6 +2590,7 @@ const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authoriz
 let orders = [];
 let bars = [...BARS];
 let kegs = [];
+let activityLog = []; // [{id, timestamp, action, details}]
 
 function setSyncStatus(msg, color) {
   const el = document.getElementById('sync-status');
@@ -2629,7 +2630,37 @@ async function sbDelete(table, id) {
   }
 }
 
-async function loadData() {
+function logActivity(action, details) {
+  const entry = {
+    id: uid(),
+    timestamp: new Date().toISOString(),
+    action,
+    details
+  };
+  activityLog.unshift(entry); // latest first
+  if (activityLog.length > 200) activityLog = activityLog.slice(0, 200); // cap at 200
+  saveActivityLog();
+}
+
+async function saveActivityLog() {
+  localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
+  try { await sbUpsert('kegs', '__activity_log__', { activityLog }); } catch(_) {}
+}
+
+async function loadActivityLog() {
+  const local = localStorage.getItem('2down_activity_log');
+  if (local) activityLog = JSON.parse(local);
+  try {
+    const remote = await sbGet('kegs');
+    const row = remote?.find(r => r.id === '__activity_log__');
+    if (row?.data?.activityLog?.length > 0) {
+      activityLog = row.data.activityLog;
+      localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
+    }
+  } catch(_) {}
+}
+
+
   try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
   try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
   try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
@@ -2638,6 +2669,7 @@ async function loadData() {
   try { const bl = localStorage.getItem('2down_beers_v1'); if (bl) BEERS = JSON.parse(bl); } catch(_){}
   try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
+  try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
   renderNav(); renderPage();
 
   setSyncStatus('Syncing...', '#D4821A');
@@ -2667,11 +2699,13 @@ async function loadData() {
     const invRow  = remoteKegs.find(k => k && k.invData);
     const kegRows = remoteKegs.filter(k => k && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData);
 
+    const alRow  = remoteKegs.find(k => k && k.activityLog);
     if (bbRow)  { breweryBeers = bbRow.breweryBeers;  localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers)); }
     if (khRow)  { kegHistory   = khRow.kegHistory;    localStorage.setItem('2down_keg_history',   JSON.stringify(kegHistory)); }
     if (blRow)  { BEERS        = blRow.beers;          localStorage.setItem('2down_beers_v1',      JSON.stringify(BEERS)); }
     if (rcRow)  { rateCard     = rcRow.rateCard;       localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
     if (invRow) { invData      = invRow.invData;       localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
+    if (alRow)  { activityLog  = alRow.activityLog;    localStorage.setItem('2down_activity_log',  JSON.stringify(activityLog)); }
 
     if (kegRows.length > 0) {
       kegs = kegRows;
@@ -2749,6 +2783,7 @@ function renderPage() { _renderPage(); }
 // Search handlers — show/hide rows directly, NO DOM rebuild
 function setOrdersSearch(v) {
   ordersSearch = v;
+  if (!v) { renderPage(); return; }
   _filterRows('orders-tbody', v);
 }
 function setKegsSearch(v) {
@@ -2791,6 +2826,7 @@ const NAV = [
   {id:'bars',      icon:'≡', label:'Bars'},
   {id:'ratecard',  icon:'₹', label:'Rate Card'},
   {id:'invoicing', icon:'🧾', label:'Invoicing'},
+  {id:'activity',  icon:'📋', label:'Activity Log'},
 ];
 
 let currentTab = 'dashboard';
@@ -2881,6 +2917,7 @@ function _renderPage() {
   else if (currentTab==='bars') c.innerHTML = pageBars();
   else if (currentTab==='ratecard') c.innerHTML = pageRateCard();
   else if (currentTab==='invoicing') c.innerHTML = pageInvoicing();
+  else if (currentTab==='activity') c.innerHTML = pageActivity();
   bindEvents();
 }
 
@@ -2888,6 +2925,56 @@ function _renderPage() {
 let dashMonthOffset = 0;
 let dashView = 'week'; // 'week' or 'month'
 let dashWeekOffset = 0; // 0 = current week
+
+function pageActivity() {
+  const actionColors = {
+    'Order Created':  '#16A34A',
+    'Order Edited':   '#2563EB',
+    'Order Deleted':  '#DC2626',
+    'Keg Assigned':   '#E87C3E',
+    'Keg Returned':   '#16A34A',
+    'Kegs Returned':  '#16A34A',
+  };
+  const actionIcons = {
+    'Order Created':  '✚',
+    'Order Edited':   '✎',
+    'Order Deleted':  '✕',
+    'Keg Assigned':   '🚚',
+    'Keg Returned':   '🏭',
+    'Kegs Returned':  '🏭',
+  };
+
+  const rows = activityLog.length > 0
+    ? activityLog.map(e => {
+        const color = actionColors[e.action] || '#888';
+        const icon = actionIcons[e.action] || '•';
+        const ts = new Date(e.timestamp);
+        const dateStr = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+        const timeStr = ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+        return `<div style="display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:50%;background:${color}18;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-weight:600;font-size:13px;color:${color}">${e.action}</span>
+              <span style="font-size:12px;color:var(--muted)">${dateStr} at ${timeStr}</span>
+            </div>
+            <div style="font-size:13px;color:var(--text);margin-top:2px">${e.details||''}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="empty">No activity recorded yet. Actions like creating orders, assigning kegs and returning kegs will appear here.</div>`;
+
+  return `
+    <div style="max-width:680px">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="section-title" style="margin-bottom:0">Activity Log</div>
+          ${activityLog.length > 0 ? `<span style="font-size:12px;color:var(--muted)">${activityLog.length} event${activityLog.length!==1?'s':''}</span>` : ''}
+        </div>
+        ${rows}
+      </div>
+    </div>`;
+}
 
 function pageDashboard() {
   const now = new Date();
@@ -2998,6 +3085,27 @@ function pageDashboard() {
           <div class="section-title">Kegging Summary</div>
           ${beerSummaryRows}
         </div>
+      </div>
+      <div class="card" style="margin-top:20px">
+        <div class="section-title">Activity Log</div>
+        ${activityLog.length === 0
+          ? `<div class="empty">No activity recorded yet</div>`
+          : activityLog.slice(0,30).map(e => {
+              const icons = {'Order Created':'➕','Order Edited':'✎','Order Deleted':'✕','Kegs Returned':'🏭','Keg Marked Missing':'⚠️','Keg Found':'✓'};
+              const colors = {'Order Created':'var(--green)','Order Edited':'var(--accent)','Order Deleted':'var(--red)','Kegs Returned':'var(--green)','Keg Marked Missing':'var(--red)','Keg Found':'var(--green)'};
+              const icon = icons[e.action]||'•';
+              const color = colors[e.action]||'var(--muted)';
+              const ts = new Date(e.timestamp).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+              return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--hover)">
+                <div style="font-size:16px;min-width:22px;text-align:center">${icon}</div>
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:600;color:${color}">${e.action}</div>
+                  <div style="font-size:12px;color:var(--muted);margin-top:2px">${e.details}</div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);white-space:nowrap">${ts}</div>
+              </div>`;
+            }).join('')
+        }
       </div>`;
   }
 
@@ -3483,6 +3591,8 @@ function commitKegAssign(orderId, pKey) {
     fills: pending.fills
   });
 
+  logActivity('Keg Assigned', `${pending.kegNo} → ${k.location} · ${primaryFill.beer}${primaryFill.batch||''}`);
+
   delete pendingKegFills[pKey];
   saveOrders();
   saveKegs();
@@ -3647,8 +3757,8 @@ async function deleteOrder(id) {
   saveKegs();
   saveKegHistory();
 
+  logActivity('Order Deleted', `${bar.barName} · ${fmtDate(o.deliveryDate)}`);
   orders = orders.filter(x=>x.id!==id);
-  localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
   setSyncStatus('Deleting...', '#D4821A');
   try {
     await sbDelete('orders', id);
@@ -3737,10 +3847,13 @@ function submitOrder() {
     status: existing ? existing.status : 'pending',
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };
+  const barForLog = bars.find(x=>x.id===Number(newOrderState.barId));
   if (editOrderId) {
     orders = orders.map(o=>o.id===editOrderId?order:o);
+    logActivity('Order Edited', `${barForLog?.barName||'Unknown'} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
   } else {
     orders.push(order);
+    logActivity('Order Created', `${barForLog?.barName||'Unknown'} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
   }
   saveOrders();
   editOrderId = null;
@@ -3950,6 +4063,12 @@ function removeBeer(idx) {
   renderPage();
 }
 
+async function saveActivityLog() {
+  localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
+  try { await sbUpsert('kegs', '__activity_log__', { activityLog }); } catch(_) {}
+}
+
+
 async function saveKegHistory() {
   localStorage.setItem('2down_keg_history', JSON.stringify(kegHistory));
   try { await sbUpsert('kegs', '__keg_history__', { kegHistory }); } catch(_) {}
@@ -4156,6 +4275,7 @@ function toggleReturnKeg(kegNo, add) {
 
 function returnKegs() {
   if (returnSelected.size === 0) return;
+  const kegNos = [...returnSelected];
   kegs = kegs.map(k => {
     if (returnSelected.has(k.kegNo)) {
       logKegEvent(k.kegNo, 'Returned to Brewery', { location: 'Brewery', beer: 'Empty' });
@@ -4163,6 +4283,7 @@ function returnKegs() {
     }
     return k;
   });
+  logActivity('Kegs Returned', `${kegNos.join(', ')} → Brewery`);
   returnSelected.clear();
   saveKegs();
   showToast();
@@ -4211,6 +4332,7 @@ function toggleMissing(kegNo) {
   if (!k) return;
   k.missing = !k.missing;
   logKegEvent(kegNo, k.missing ? 'Marked Missing' : 'Found', { location: k.location });
+  logActivity(k.missing ? 'Keg Marked Missing' : 'Keg Found', `${kegNo} · ${k.location}`);
   saveKegs();
   renderPage();
 }
