@@ -3545,11 +3545,14 @@ function pageNewOrder() {
         <div class="grid2">
           <div>
             <label class="lbl">Bar Name *</label>
-            <datalist id="bar-datalist">${barDatalist}</datalist>
-            <input id="bar-search-inp" class="inp" list="bar-datalist" autocomplete="off"
-              placeholder="Type bar name…"
-              value="${selectedBar ? selectedBar.barName + ' (' + selectedBar.area + ')' : newOrderState.barInputVal||''}"
-              oninput="selectBarFromInput(this.value)">
+            <div style="position:relative">
+              <input id="bar-search-inp" class="inp" autocomplete="off"
+                placeholder="Type bar name…"
+                value="${selectedBar ? selectedBar.barName + ' (' + selectedBar.area + ')' : newOrderState.barInputVal||''}"
+                oninput="filterBarSuggestions(this.value)"
+                onkeydown="if(event.key==='Escape')closeBarSuggestions()">
+              <div id="bar-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:200;max-height:260px;overflow-y:auto"></div>
+            </div>
             ${barInfo}
           </div>
           <div>
@@ -3657,6 +3660,40 @@ async function deleteOrder(id) {
   }
   showToast();
   renderPage();
+}
+
+function filterBarSuggestions(val) {
+  const box = document.getElementById('bar-suggestions');
+  if (!box) return;
+  const q = val.trim().toLowerCase();
+  if (!q) { box.style.display = 'none'; return; }
+  const activeBars = bars.filter(b => !b.inactive);
+  const matches = activeBars
+    .filter(b => b.barName.toLowerCase().includes(q) || (b.area||'').toLowerCase().includes(q))
+    .slice(0, 12);
+  if (!matches.length) { box.style.display = 'none'; return; }
+  box.innerHTML = matches.map(b => `
+    <div onclick="selectBarSuggestion(${b.id})"
+      style="padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <span style="font-weight:600">${b.barName}</span>
+      <span style="color:var(--muted);font-size:12px;margin-left:8px">${b.area}</span>
+    </div>`).join('');
+  box.style.display = 'block';
+}
+
+function selectBarSuggestion(barId) {
+  const b = bars.find(x => x.id === barId);
+  if (!b) return;
+  newOrderState.barId = String(barId);
+  newOrderState.barInputVal = b.barName + ' (' + b.area + ')';
+  closeBarSuggestions();
+  renderPage();
+}
+
+function closeBarSuggestions() {
+  const box = document.getElementById('bar-suggestions');
+  if (box) box.style.display = 'none';
 }
 
 function selectBarFromInput(val) {
