@@ -2631,6 +2631,7 @@ async function sbDelete(table, id) {
 }
 
 function logActivity(action, details) {
+  if (!Array.isArray(activityLog)) activityLog = [];
   const entry = {
     id: uid(),
     timestamp: new Date().toISOString(),
@@ -3088,7 +3089,7 @@ function pageDashboard() {
       </div>
       <div class="card" style="margin-top:20px">
         <div class="section-title">Activity Log</div>
-        ${activityLog.length === 0
+        ${(!activityLog || activityLog.length === 0)
           ? `<div class="empty">No activity recorded yet</div>`
           : activityLog.slice(0,30).map(e => {
               const icons = {'Order Created':'➕','Order Edited':'✎','Order Deleted':'✕','Kegs Returned':'🏭','Keg Marked Missing':'⚠️','Keg Found':'✓'};
@@ -5593,9 +5594,7 @@ function checkMainPw() {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 window.onerror = function(msg, src, line, col, err) {
-  document.body.innerHTML = `<div style="padding:30px;font-family:monospace;background:#fff;color:#c00">
-    <b>JS Error:</b><br>${msg}<br>Line: ${line}<br>${err ? err.stack : ''}
-  </div>`;
+  console.error('JS Error:', msg, 'Line:', line, err ? err.stack : '');
 };
 
 document.addEventListener('DOMContentLoaded', () => {
