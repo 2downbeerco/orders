@@ -5371,17 +5371,18 @@ function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entit
   let grandMRP = 0, grandSvc = 0;
   activeOrders.forEach(o => {
     const hist = HISTORICAL_INV_DATA[o.id];
+    const inv = invData[o.id]||{};
     if (hist) {
-      grandMRP += hist.mrpAmount||0;
-      grandSvc += hist.svcAmount||0;
+      grandMRP += (hist.mrpAmount||0) - (Number(inv.mrpDiscount)||0);
+      grandSvc += (hist.svcAmount||0) - (Number(inv.svcDiscount)||0);
     } else {
       const b = bars.find(x=>x.id===o.barId)||{};
       const rc = rateCard[b.id]||{};
       const totalLitres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
-      grandMRP += Math.ceil(MRP_PER_LITRE*1.02*totalLitres) - (Number((invData[o.id]||{}).mrpDiscount)||0);
+      grandMRP += Math.ceil(MRP_PER_LITRE*1.02*totalLitres) - (Number(inv.mrpDiscount)||0);
       let svcGross=0;
       (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
-      grandSvc += svcGross - (Number((invData[o.id]||{}).svcDiscount)||0);
+      grandSvc += svcGross - (Number(inv.svcDiscount)||0);
     }
   });
 
@@ -5403,13 +5404,19 @@ function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entit
       // Bar-level totals
       let barMRP=0, barSvc=0, barKegs=0;
       bOrders.forEach(o => {
-        const totalLitres=(o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
-        const mrpGross=Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
-        const mrpDisc=Number((invData[o.id]||{}).mrpDiscount)||0;
-        barMRP += mrpGross-mrpDisc;
-        let svcGross=0;
-        (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
-        barSvc += svcGross-(Number((invData[o.id]||{}).svcDiscount)||0);
+        const hist = HISTORICAL_INV_DATA[o.id];
+        const inv = invData[o.id]||{};
+        if (hist) {
+          barMRP += (hist.mrpAmount||0) - (Number(inv.mrpDiscount)||0);
+          barSvc += (hist.svcAmount||0) - (Number(inv.svcDiscount)||0);
+        } else {
+          const totalLitres=(o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+          const mrpGross=Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
+          barMRP += mrpGross-(Number(inv.mrpDiscount)||0);
+          let svcGross=0;
+          (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+          barSvc += svcGross-(Number(inv.svcDiscount)||0);
+        }
         barKegs += (o.items||[]).reduce((s,i)=>s+i.qty,0);
       });
 
