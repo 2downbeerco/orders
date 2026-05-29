@@ -4596,6 +4596,7 @@ function showKegHistory(kegNo) {
 
 // ── Beers Tab ─────────────────────────────────────────────────────────────
 let newBatchBeer = ''; // tracks which beer the inline add form is for
+let editingBatchIdx = null; // tracks which batch is being edited
 let consumedFilter = 'all'; // filter for consumed batches
 let beersSubTab = 'active'; // 'active' or 'consumed'
 
@@ -4743,16 +4744,28 @@ function pageBeers() {
                         ${bb.batch}
                       </td>
                       <td style="padding:6px 14px">
-                        <div style="display:flex;align-items:center;gap:6px">
-                          <input type="number" min="0" class="inp" style="width:90px;padding:4px 8px;font-size:13px;font-weight:600;color:var(--orange)"
-                            value="${bb.litres||0}" onchange="updateBatchLitres(${globalIdx}, this.value)">
-                          <span style="font-size:11px;color:var(--muted)">L</span>
-                        </div>
+                        <span style="font-size:13px;font-weight:600;color:var(--orange)">${bb.litres||0}L</span>
                       </td>
                       <td style="padding:6px 14px">
-                        <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
+                        <div style="display:flex;gap:6px">
+                          <button class="btn btn-ghost btn-sm" onclick="editBatchLitres(${globalIdx})" title="Edit litres">✎</button>
+                          <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
+                        </div>
                       </td>
-                    </tr>`;
+                    </tr>` + (editingBatchIdx === globalIdx ? `<tr style="background:var(--accent-bg)">
+                      <td colspan="5" style="padding:10px 14px">
+                        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+                          <div><label class="lbl">Batch No.</label>
+                            <input class="inp" style="width:110px" value="${bb.batch}" readonly></div>
+                          <div><label class="lbl">Brew Date</label>
+                            <input id="edit-batch-brewdate" class="inp" style="width:150px" type="date" value="${bb.brewDate||''}"></div>
+                          <div><label class="lbl">Litres Brewed</label>
+                            <input id="edit-batch-litres" class="inp" style="width:90px" type="number" min="0" value="${bb.litres||0}"></div>
+                          <button class="btn btn-primary btn-sm" onclick="saveEditBatch(${globalIdx})">Save</button>
+                          <button class="btn btn-ghost btn-sm" onclick="editingBatchIdx=null;renderPage()">Cancel</button>
+                        </div>
+                      </td>
+                    </tr>` : '');
                   }).join('');
 
                   const addForm = showAddForm ? `<tr style="background:var(--accent-bg)">
@@ -4872,6 +4885,25 @@ function saveBatchForBeer(beerCode) {
   breweryBeers.push({ beer: beerCode, batch, litres, brewDate });
   newBatchBeer = '';
   saveBreweryBeers();
+  renderPage();
+}
+
+function saveEditBatch(idx) {
+  if (!breweryBeers[idx]) return;
+  const litresEl = document.getElementById('edit-batch-litres');
+  const brewDateEl = document.getElementById('edit-batch-brewdate');
+  const newVal = Number(litresEl?.value)||0;
+  breweryBeers[idx].litres = newVal;
+  breweryBeers[idx].brewDate = brewDateEl?.value || breweryBeers[idx].brewDate || '';
+  if (newVal === 0) breweryBeers[idx].inactive = true;
+  editingBatchIdx = null;
+  saveBreweryBeers();
+  renderPage();
+}
+
+function editBatchLitres(idx) {
+  if (!breweryBeers[idx]) return;
+  editingBatchIdx = idx;
   renderPage();
 }
 
