@@ -2843,7 +2843,7 @@ const NAV = [
   {id:'activity',  icon:'📋', label:'Activity Log'},
 ];
 
-let currentTab = 'dashboard';
+let currentTab = 'orders';
 
 function renderNav() {
   const ni = document.getElementById('nav-items');
@@ -2874,7 +2874,7 @@ let ratecardUnlocked = false;
 let invoicingUnlocked = false;
 
 function goTo(tab) {
-  if ((tab === 'ratecard' || tab === 'invoicing') && !ratecardUnlocked) {
+  if ((tab === 'ratecard' || tab === 'invoicing' || tab === 'dashboard') && !ratecardUnlocked) {
     showLockedPage(tab);
     return;
   }
@@ -2899,7 +2899,7 @@ function showLockedPage(tab) {
           onkeydown="if(event.key==='Enter')checkLockPw('${tab}')">
         <button class="btn btn-primary" style="width:100%" onclick="checkLockPw('${tab}')">Unlock</button>
         <div id="lock-err" style="font-size:12px;color:var(--red);margin-top:10px"></div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:16px" onclick="goTo('dashboard')">Cancel</button>
+        <button class="btn btn-ghost btn-sm" style="margin-top:16px" onclick="goTo('orders')">Cancel</button>
       </div>
     </div>`;
   document.getElementById('lock-pw').focus();
