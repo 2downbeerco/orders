@@ -4843,7 +4843,11 @@ function pageInvoicing() {
     const b = bars.find(x=>x.id===o.barId)||{barName:''};
     if (b.barName.toLowerCase().includes('patel provision')) return false;
     return true;
-  }).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate));
+  }).sort((a,b)=>{
+    const ta = a.createdAt||a.deliveryDate||'';
+    const tb = b.createdAt||b.deliveryDate||'';
+    return tb.localeCompare(ta);
+  });
 
   // Entity tabs
   const entityTabBar = `
