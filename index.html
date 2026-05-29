@@ -4680,6 +4680,10 @@ function pageBeers() {
             <input id="new-batch-no-${b.code}" class="inp" style="width:160px" placeholder="e.g. BB-2025-04">
           </div>
           <div>
+            <label class="lbl">Brew Date</label>
+            <input id="new-batch-brewdate-${b.code}" class="inp" style="width:150px" type="date">
+          </div>
+          <div>
             <label class="lbl">Quantity (Litres)</label>
             <input id="new-batch-litres-${b.code}" class="inp" style="width:120px" type="number" min="0" placeholder="e.g. 500">
           </div>
@@ -4735,7 +4739,9 @@ function pageBeers() {
                     return `<tr style="background:var(--bg)">
                       <td style="padding:6px 14px" colspan="2"></td>
                       <td style="padding:6px 14px;font-family:monospace;font-size:13px;font-weight:600;cursor:pointer;color:var(--accent);text-decoration:underline"
-                        onclick="showBatchHistory('${b.code}','${bb.batch}')">${bb.batch}</td>
+                        onclick="showBatchHistory('${b.code}','${bb.batch}')">
+                        ${bb.batch}
+                      </td>
                       <td style="padding:6px 14px">
                         <div style="display:flex;align-items:center;gap:6px">
                           <input type="number" min="0" class="inp" style="width:90px;padding:4px 8px;font-size:13px;font-weight:600;color:var(--orange)"
@@ -4754,6 +4760,8 @@ function pageBeers() {
                       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
                         <div><label class="lbl">Batch No.</label>
                           <input id="new-batch-no-${b.code}" class="inp" style="width:130px" placeholder="e.g. 51"></div>
+                      <div><label class="lbl">Brew Date</label>
+                        <input id="new-batch-brewdate-${b.code}" class="inp" style="width:140px" type="date"></div>
                         <div><label class="lbl">Litres</label>
                           <input id="new-batch-litres-${b.code}" class="inp" style="width:90px" type="number" min="0" placeholder="500"></div>
                         <button class="btn btn-primary btn-sm" onclick="saveBatchForBeer('${b.code}')">Save</button>
@@ -4853,13 +4861,15 @@ function toggleBeerActive(idx) {
 function saveBatchForBeer(beerCode) {
   const batchEl = document.getElementById(`new-batch-no-${beerCode}`);
   const litresEl = document.getElementById(`new-batch-litres-${beerCode}`);
+  const brewDateEl = document.getElementById(`new-batch-brewdate-${beerCode}`);
   const batch = batchEl?.value?.trim();
   const litres = Number(litresEl?.value) || 0;
+  const brewDate = brewDateEl?.value || '';
   if (!batch) { alert('Please enter a batch number.'); return; }
   if (breweryBeers.find(x => x.beer === beerCode && x.batch === batch)) {
     alert('This batch number already exists for this beer.'); return;
   }
-  breweryBeers.push({ beer: beerCode, batch, litres });
+  breweryBeers.push({ beer: beerCode, batch, litres, brewDate });
   newBatchBeer = '';
   saveBreweryBeers();
   renderPage();
@@ -4876,6 +4886,10 @@ function updateBatchLitres(idx, value) {
 }
 
 function showBatchHistory(beerCode, batchNo) {
+  // Find batch entry for brew date
+  const batchEntry = breweryBeers.find(x => x.beer === beerCode && x.batch == batchNo);
+  const brewDate = batchEntry?.brewDate;
+
   // Find all orders that used this beer+batch
   const deliveries = [];
   orders.forEach(o => {
@@ -4916,8 +4930,10 @@ function showBatchHistory(beerCode, batchNo) {
       <div class="modal-box" style="max-width:500px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
           <div>
-            <div style="font-size:18px;font-weight:700">${beerCode} — ${batchNo}</div>
-            <div style="font-size:12px;color:#666;margin-top:4px">${deliveries.length} delivery${deliveries.length!==1?'ies':''} · ${totalLitres}L dispatched</div>
+            <div style="font-size:18px;font-weight:700">${beerCode} — Batch ${batchNo}</div>
+            <div style="font-size:12px;color:#666;margin-top:4px">
+              ${brewDate ? `Brewed: <b>${fmtDate(brewDate)}</b> &nbsp;·&nbsp; ` : ''}${deliveries.length} deliver${deliveries.length!==1?'ies':'y'} · ${totalLitres}L dispatched
+            </div>
           </div>
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;line-height:1">&times;</button>
         </div>
