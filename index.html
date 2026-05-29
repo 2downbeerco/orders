@@ -2888,7 +2888,7 @@ function showLockedPage(tab) {
   closeMobileNav();
   currentTab = tab;
   renderNav();
-  const label = tab === 'ratecard' ? 'Rate Card' : 'Invoicing';
+  const label = tab === 'ratecard' ? 'Rate Card' : tab === 'dashboard' ? 'Dashboard' : 'Invoicing';
   document.getElementById('content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center">
