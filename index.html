@@ -4287,6 +4287,7 @@ function showOverdueKegs() {
     return `<tr>
       <td style="font-family:monospace;font-weight:700;color:var(--red)">${k.kegNo}</td>
       <td style="font-size:13px">${k.location}</td>
+      <td style="font-size:13px">${k.beer !== 'Empty' ? `<span style="font-weight:600">${k.beer}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
       <td style="font-size:13px;color:var(--muted)">${fmtDate(_kegDeliveryDates[k.kegNo])}</td>
       <td style="font-size:13px;font-weight:600;color:var(--red)">${monthsOut} months</td>
     </tr>`;
@@ -4305,7 +4306,7 @@ function showOverdueKegs() {
         <div style="max-height:480px;overflow-y:auto">
           <table class="tbl">
             <thead><tr>
-              <th>Keg No.</th><th>Location</th><th>Delivered</th><th>Time Out</th>
+              <th>Keg No.</th><th>Location</th><th>Beer</th><th>Delivered</th><th>Time Out</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
