@@ -3233,7 +3233,7 @@ function pageOrders() {
       <td class="sticky-col" onclick="toggleOrderExpand('${o.id}')">
         <div style="font-weight:600">${b.barName}</div>
         ${b.entity?`<div style="font-size:11px;color:var(--muted);margin-top:1px">${cleanEntity(b.entity)}</div>`:''}
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}${b.licType?` · ${badge(b.licType,'#58A6FF')}`:''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}${b.licType?` · ${badge(b.licType,'#58A6FF')}${b.licNo?`<span style="font-size:10px;color:var(--muted);margin-left:3px">#${b.licNo}</span>`:''}`:''}</div>
       </td>
       <td style="font-size:12px" onclick="toggleOrderExpand('${o.id}')">${fmtDate(o.deliveryDate)}</td>
       <td style="font-size:12px" onclick="toggleOrderExpand('${o.id}')">${itemBadges}</td>
