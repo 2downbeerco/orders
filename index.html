@@ -3160,12 +3160,13 @@ function pageDashboard() {
       </div>
       ${toggleBtns}
     </div>
-    <div class="grid4">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px">
       ${[
         [`${shortMonth} Orders`,  monthOrders.length, '#F5C842'],
-        [`${shortMonth} Kegs`,    monthKegs,          '#E87C3E'],
-        [`${shortMonth} TP Kegs`, monthTP,            '#A3C96B'],
-        [`Avg / Order`, monthOrders.length?Math.round(monthKegs/monthOrders.length):0,'#58A6FF'],
+        ['Kegs Shipped',          monthKegs,          '#E87C3E'],
+        ['Litres Shipped',        monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0)+'L', '#A3C96B'],
+        ['Delivery Weeks',        new Set(monthOrders.map(o=>{ const d=new Date(o.deliveryDate); const mon=new Date(d); mon.setDate(d.getDate()-((d.getDay()+6)%7)); return mon.toISOString().slice(0,10); })).size, '#58A6FF'],
+        ['Avg Kegs / Order',      monthOrders.length?Math.round(monthKegs/monthOrders.length):0, '#E87C3E'],
       ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
     </div>
     <div class="grid2">
