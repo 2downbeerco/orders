@@ -2662,6 +2662,7 @@ async function loadActivityLog() {
 }
 
 
+async function loadData() {
   try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
   try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
   try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
