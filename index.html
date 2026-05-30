@@ -2687,7 +2687,8 @@ async function loadData() {
     const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([sbGet('orders'), sbGet('bars'), sbGet('kegs')]);
 
     if (remoteOrders.length > 0) {
-      orders = remoteOrders;
+      // Filter out any corrupted order entries
+      orders = remoteOrders.filter(o => o && o.id && o.barId && o.deliveryDate && Array.isArray(o.items));
       localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
     } else if (orders.length > 0) {
       const validOrders = orders.filter(o => o && o.id != null && o.id !== '');
@@ -2711,7 +2712,8 @@ async function loadData() {
     const blRow   = remoteKegs.find(k => k && k.beers);
     const rcRow   = remoteKegs.find(k => k && k.rateCard);
     const invRow  = remoteKegs.find(k => k && k.invData);
-    const kegRows = remoteKegs.filter(k => k && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData);
+    // Filter valid keg rows — must have kegNo and size, no special data fields
+    const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog);
 
     const alRow  = remoteKegs.find(k => k && k.activityLog);
     if (bbRow)  { breweryBeers = bbRow.breweryBeers;  localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers)); }
@@ -3440,7 +3442,7 @@ function printOrders() {
   const wEndDisplay = new Date(wEnd); wEndDisplay.setDate(wEnd.getDate()-1);
   const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
 
-  const weekOrders = orders.filter(o=>{
+  const weekOrders = orders.filter(o=>{ if(!o||!o.id) return false;
     const d = new Date(o.deliveryDate);
     return d >= wStart && d < wEnd;
   }).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate));
@@ -3654,7 +3656,7 @@ let newOrderState = { barId:'', barInputVal:'', deliveryDate:today(), tpTotal:''
 let editOrderId = null;
 
 function pageNewOrder() {
-  const activeBars = bars.filter(b=>!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
+  const activeBars = bars.filter(b=>b&&b.id&&!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
   const barDatalist = activeBars.map(b=>`<option value="${b.barName} (${b.area})">${b.barName} (${b.area})</option>`).join('');
   const selectedBar = newOrderState.barId ? bars.find(x=>x.id==newOrderState.barId) : null;
   const barInfo = selectedBar
@@ -4105,7 +4107,7 @@ function removeBeer(idx) {
   BEERS.splice(idx, 1);
   // Clean up batches for the removed beer
   const hadBatches = breweryBeers.some(bb => bb.beer === removed.code);
-  breweryBeers = breweryBeers.filter(bb => bb.beer !== removed.code);
+  breweryBeers = breweryBeers.filter(bb => bb&&bb.beer !== removed.code);
   saveBeers();
   if (hadBatches) saveBreweryBeers();
   renderPage();
@@ -4166,7 +4168,7 @@ function pageKegs() {
             <option value="${k.location}" selected>${k.location}</option>
             ${k.location!=='Brewery'?'<option value="Brewery">Brewery</option>':''}
             ${k.location!=='Unknown'?'<option value="Unknown">Unknown</option>':''}
-            ${bars.filter(b=>!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName)).map(b=>`<option value="${b.barName}" ${k.location===b.barName?'selected':''}>${b.barName}</option>`).join('')}
+            ${bars.filter(b=>b&&b.id&&!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName)).map(b=>`<option value="${b.barName}" ${k.location===b.barName?'selected':''}>${b.barName}</option>`).join('')}
           </select>
         </td>
         <td>
@@ -4174,7 +4176,7 @@ function pageKegs() {
             value="${k.beer}" list="beer-list-${k.kegNo}" onchange="updateKegBeer('${k.kegNo}',this.value)">
           <datalist id="beer-list-${k.kegNo}">
             <option value="Empty">
-            ${breweryBeers.filter(bb=>!bb.inactive).map(bb=>`<option value="${bb.beer}${bb.batch}">`).join('')}
+            ${breweryBeers.filter(bb=>bb&&!bb.inactive).map(bb=>`<option value="${bb.beer}${bb.batch}">`).join('')}
           </datalist>
         </td>
         <td>
@@ -4622,7 +4624,7 @@ let beersSubTab = 'active'; // 'active' or 'consumed'
 
 function pageBeers() {
   const beerRows = BEERS.map((b, i) => {
-    const batches = breweryBeers.filter(bb => bb.beer === b.code);
+    const batches = breweryBeers.filter(bb => bb&&bb.beer === b.code);
     const activeBatches = batches.filter(bb => !bb.inactive);
     const totalLitres = activeBatches.reduce((s, bb) => s + (Number(bb.litres)||0), 0);
 
@@ -4738,7 +4740,7 @@ function pageBeers() {
               <thead><tr><th class="sticky-col">Name</th><th>Code</th><th>Batch</th><th>Litres</th><th></th></tr></thead>
               <tbody>
                 ${BEERS.filter(b => !b.inactive).map((b, i) => {
-                  const batches = breweryBeers.filter(bb => bb.beer === b.code);
+                  const batches = breweryBeers.filter(bb => bb&&bb.beer === b.code);
                   const activeBatches = batches.filter(bb => !bb.inactive && Number(bb.litres) > 0);
                   const showAddForm = newBatchBeer === b.code;
                   const isInactiveBeer = b.inactive;
@@ -5594,7 +5596,7 @@ let editBarId = null;
 let editBarData = {};
 
 function pageBars() {
-  const activeBars   = bars.filter(b=>!b.inactive);
+  const activeBars   = bars.filter(b=>b&&b.id&&!b.inactive);
   const inactiveBars = bars.filter(b=>b.inactive);
 
   const searchFn = b =>
