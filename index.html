@@ -2732,6 +2732,7 @@ async function loadData() {
 
     setSyncStatus('Live', '#16A34A');
     setTimeout(() => setSyncStatus('', ''), 2000);
+    editingBatchIdx = null; // reset any in-progress edits after sync
     renderPage();
   } catch(e) {
     console.error('Supabase error:', e);
@@ -2922,16 +2923,22 @@ function checkLockPw(tab) {
 // ── Pages ─────────────────────────────────────────────────────────────────
 function _renderPage() {
   const c = document.getElementById('content');
-  if (currentTab==='dashboard') c.innerHTML = pageDashboard();
-  else if (currentTab==='orders') c.innerHTML = pageOrders();
-  else if (currentTab==='new-order') c.innerHTML = pageNewOrder();
-  else if (currentTab==='kegging') c.innerHTML = pageKegging();
-  else if (currentTab==='kegs') c.innerHTML = pageKegs();
-  else if (currentTab==='beers') c.innerHTML = pageBeers();
-  else if (currentTab==='bars') c.innerHTML = pageBars();
-  else if (currentTab==='ratecard') c.innerHTML = pageRateCard();
-  else if (currentTab==='invoicing') c.innerHTML = pageInvoicing();
-  else if (currentTab==='activity') c.innerHTML = pageActivity();
+  if (!c) return;
+  try {
+    if (currentTab==='dashboard') c.innerHTML = pageDashboard();
+    else if (currentTab==='orders') c.innerHTML = pageOrders();
+    else if (currentTab==='new-order') c.innerHTML = pageNewOrder();
+    else if (currentTab==='kegging') c.innerHTML = pageKegging();
+    else if (currentTab==='kegs') c.innerHTML = pageKegs();
+    else if (currentTab==='beers') c.innerHTML = pageBeers();
+    else if (currentTab==='bars') c.innerHTML = pageBars();
+    else if (currentTab==='ratecard') c.innerHTML = pageRateCard();
+    else if (currentTab==='invoicing') c.innerHTML = pageInvoicing();
+    else if (currentTab==='activity') c.innerHTML = pageActivity();
+  } catch(e) {
+    console.error('Render error on tab', currentTab, e);
+    c.innerHTML = `<div style="padding:30px;color:var(--red)"><b>Error rendering ${currentTab}</b><br><small>${e.message}</small><br><br><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>`;
+  }
   bindEvents();
 }
 
