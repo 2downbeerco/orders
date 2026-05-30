@@ -4111,10 +4111,6 @@ function removeBeer(idx) {
   renderPage();
 }
 
-async function saveActivityLog() {
-  localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
-  try { await sbUpsert('kegs', '__activity_log__', { activityLog }); } catch(_) {}
-}
 
 
 async function saveKegHistory() {
