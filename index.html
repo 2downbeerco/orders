@@ -4136,7 +4136,7 @@ async function saveBreweryBeers() {
 }
 
 function pageKegs() {
-  const sizeFiltered = kegs.filter(k => kegsSize === 'all' || k.size === Number(kegsSize));
+  const sizeFiltered = kegs.filter(k => k && k.kegNo && (kegsSize === 'all' || k.size === Number(kegsSize)));
 
   const filtered = sizeFiltered.filter(k => {
     const matchSearch = !kegsSearch ||
@@ -4149,7 +4149,7 @@ function pageKegs() {
       kegsFilter === 'out' ? (k.location !== 'Brewery' && !k.missing) :
       kegsFilter === 'missing' ? k.missing : true;
     return matchSearch && matchFilter;
-  }).sort((a,b) => a.kegNo.localeCompare(b.kegNo, undefined, {numeric:true, sensitivity:'base'}));
+  }).sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
 
   const totalAtBrewery = sizeFiltered.filter(k=>k.location==='Brewery').length;
   const totalOut = sizeFiltered.filter(k=>k.location!=='Brewery'&&!k.missing).length;
