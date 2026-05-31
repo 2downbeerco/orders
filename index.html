@@ -2878,7 +2878,7 @@ let ratecardUnlocked = false;
 let invoicingUnlocked = false;
 
 function goTo(tab) {
-  if ((tab === 'ratecard' || tab === 'invoicing' || tab === 'dashboard') && !ratecardUnlocked) {
+  if ((tab === 'ratecard' || tab === 'invoicing') && !ratecardUnlocked) {
     showLockedPage(tab);
     return;
   }
