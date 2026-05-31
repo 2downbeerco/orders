@@ -2647,7 +2647,6 @@ function logActivity(action, details) {
     details
   };
   activityLog.unshift(entry); // latest first
-  if (activityLog.length > 200) activityLog = activityLog.slice(0, 200); // cap at 200
   saveActivityLog();
 }
 
@@ -2951,26 +2950,48 @@ let dashView = 'week'; // 'week' or 'month'
 let dashWeekOffset = 0; // 0 = current week
 let dashExpandedBar = null;
 
+let activityDateFilter = '';
+let activityActionFilter = 'all';
+
 function pageActivity() {
   const actionColors = {
-    'Order Created':  '#16A34A',
-    'Order Edited':   '#2563EB',
-    'Order Deleted':  '#DC2626',
-    'Keg Assigned':   '#E87C3E',
-    'Keg Returned':   '#16A34A',
-    'Kegs Returned':  '#16A34A',
+    'Order Created':      '#16A34A',
+    'Order Edited':       '#2563EB',
+    'Order Deleted':      '#DC2626',
+    'Keg Assigned':       '#E87C3E',
+    'Keg Returned':       '#16A34A',
+    'Kegs Returned':      '#16A34A',
+    'Keg Marked Missing': '#DC2626',
+    'Keg Found':          '#16A34A',
   };
   const actionIcons = {
-    'Order Created':  '✚',
-    'Order Edited':   '✎',
-    'Order Deleted':  '✕',
-    'Keg Assigned':   '🚚',
-    'Keg Returned':   '🏭',
-    'Kegs Returned':  '🏭',
+    'Order Created':      '✚',
+    'Order Edited':       '✎',
+    'Order Deleted':      '✕',
+    'Keg Assigned':       '🚚',
+    'Keg Returned':       '🏭',
+    'Kegs Returned':      '🏭',
+    'Keg Marked Missing': '⚠️',
+    'Keg Found':          '✓',
   };
 
-  const rows = activityLog.length > 0
-    ? activityLog.map(e => {
+  // Get unique dates that have activity (sorted newest first)
+  const activeDates = [...new Set(activityLog.map(e => new Date(e.timestamp).toISOString().slice(0,10)))]
+    .sort((a,b) => b.localeCompare(a));
+
+  const allActions = [...new Set(activityLog.map(e => e.action))].sort();
+
+  let filtered = activityLog.filter(e => {
+    if (activityActionFilter !== 'all' && e.action !== activityActionFilter) return false;
+    if (activityDateFilter) {
+      const d = new Date(e.timestamp).toISOString().slice(0,10);
+      if (d !== activityDateFilter) return false;
+    }
+    return true;
+  });
+
+  const rows = filtered.length > 0
+    ? filtered.map(e => {
         const color = actionColors[e.action] || '#888';
         const icon = actionIcons[e.action] || '•';
         const ts = new Date(e.timestamp);
@@ -2987,14 +3008,31 @@ function pageActivity() {
           </div>
         </div>`;
       }).join('')
-    : `<div class="empty">No activity recorded yet. Actions like creating orders, assigning kegs and returning kegs will appear here.</div>`;
+    : `<div class="empty">No activity${activityDateFilter||activityActionFilter!=='all'?' matching filters':' recorded yet'}.</div>`;
 
   return `
-    <div style="max-width:680px">
+    <div style="max-width:720px">
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
           <div class="section-title" style="margin-bottom:0">Activity Log</div>
-          ${activityLog.length > 0 ? `<span style="font-size:12px;color:var(--muted)">${activityLog.length} event${activityLog.length!==1?'s':''}</span>` : ''}
+          <span style="font-size:12px;color:var(--muted);margin-right:auto">${filtered.length} of ${activityLog.length} event${activityLog.length!==1?'s':''}</span>
+          <select class="inp" style="width:170px;font-size:12px;padding:5px 10px"
+            onchange="activityDateFilter=this.value;renderPage()">
+            <option value="" ${!activityDateFilter?'selected':''}>All dates</option>
+            ${activeDates.map(d => {
+              const label = new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+              const count = activityLog.filter(e=>new Date(e.timestamp).toISOString().slice(0,10)===d).length;
+              return `<option value="${d}" ${activityDateFilter===d?'selected':''}>${label} (${count})</option>`;
+            }).join('')}
+          </select>
+          <select class="inp" style="width:180px;font-size:12px;padding:5px 10px"
+            onchange="activityActionFilter=this.value;renderPage()">
+            <option value="all" ${activityActionFilter==='all'?'selected':''}>All actions</option>
+            ${allActions.map(a=>`<option value="${a}" ${activityActionFilter===a?'selected':''}>${a}</option>`).join('')}
+          </select>
+          ${activityDateFilter||activityActionFilter!=='all'
+            ? `<button class="btn btn-ghost btn-sm" onclick="activityDateFilter='';activityActionFilter='all';renderPage()">Clear</button>`
+            : ''}
         </div>
         ${rows}
       </div>
@@ -3132,27 +3170,6 @@ function pageDashboard() {
           <div class="section-title">Kegging Summary</div>
           ${beerSummaryRows}
         </div>
-      </div>
-      <div class="card" style="margin-top:20px">
-        <div class="section-title">Activity Log</div>
-        ${(!activityLog || activityLog.length === 0)
-          ? `<div class="empty">No activity recorded yet</div>`
-          : activityLog.slice(0,30).map(e => {
-              const icons = {'Order Created':'➕','Order Edited':'✎','Order Deleted':'✕','Kegs Returned':'🏭','Keg Marked Missing':'⚠️','Keg Found':'✓'};
-              const colors = {'Order Created':'var(--green)','Order Edited':'var(--accent)','Order Deleted':'var(--red)','Kegs Returned':'var(--green)','Keg Marked Missing':'var(--red)','Keg Found':'var(--green)'};
-              const icon = icons[e.action]||'•';
-              const color = colors[e.action]||'var(--muted)';
-              const ts = new Date(e.timestamp).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-              return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--hover)">
-                <div style="font-size:16px;min-width:22px;text-align:center">${icon}</div>
-                <div style="flex:1">
-                  <div style="font-size:13px;font-weight:600;color:${color}">${e.action}</div>
-                  <div style="font-size:12px;color:var(--muted);margin-top:2px">${e.details}</div>
-                </div>
-                <div style="font-size:11px;color:var(--muted);white-space:nowrap">${ts}</div>
-              </div>`;
-            }).join('')
-        }
       </div>`;
   }
 
