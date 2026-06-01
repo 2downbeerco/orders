@@ -3514,10 +3514,11 @@ function doPrintOrders() {
     });
 
   const tableRows = filtered.map(o=>{
-    const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown',area:'',licType:'',licNo:''};
+    const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown',area:'',entity:'',licType:'',licNo:''};
     const totOrder = (o.items||[]).reduce((s,i)=>s+i.qty,0);
+    const entityName = b.entity ? b.entity.replace(/\s*\(.*?\)\s*/g,'').trim() : b.barName;
     return `<tr>
-      <td style="font-weight:600">${b.barName}</td>
+      <td style="font-weight:600">${entityName}<br><span style="font-weight:400;font-size:11px;color:#666">${b.barName}</span></td>
       <td>${b.area||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.tpTotal||'—'}</td>
       <td style="text-align:center">${b.licType||'—'}${b.licNo?` #${b.licNo}`:''}</td>
@@ -3551,7 +3552,7 @@ function doPrintOrders() {
   <div class="meta" style="text-align:right">Printed: ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</div>
 </div>
 <table>
-  <thead><tr><th>Bar Name</th><th>Area</th><th style="text-align:center">TP Kegs</th><th style="text-align:center">Licence</th><th>Delivery Date</th></tr></thead>
+  <thead><tr><th>Legal Entity</th><th>Area</th><th style="text-align:center">TP Kegs</th><th style="text-align:center">Licence</th><th>Delivery Date</th></tr></thead>
   <tbody>${tableRows}</tbody>
 </table>
 <div class="footer">2 Down Brewing Co. &nbsp;·&nbsp; Delivery Schedule</div>
