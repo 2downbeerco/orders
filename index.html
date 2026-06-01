@@ -2714,15 +2714,17 @@ async function loadData() {
     const rcRow   = remoteKegs.find(k => k && k.rateCard);
     const invRow  = remoteKegs.find(k => k && k.invData);
     // Filter valid keg rows — must have kegNo and size, no special data fields
-    const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog);
+    const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports);
 
     const alRow  = remoteKegs.find(k => k && k.activityLog);
-    if (bbRow)  { breweryBeers = bbRow.breweryBeers;  localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers)); }
-    if (khRow)  { kegHistory   = khRow.kegHistory;    localStorage.setItem('2down_keg_history',   JSON.stringify(kegHistory)); }
-    if (blRow)  { BEERS        = blRow.beers;          localStorage.setItem('2down_beers_v1',      JSON.stringify(BEERS)); }
-    if (rcRow)  { rateCard     = rcRow.rateCard;       localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
-    if (invRow) { invData      = invRow.invData;       localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
-    if (alRow)  { activityLog  = alRow.activityLog;    localStorage.setItem('2down_activity_log',  JSON.stringify(activityLog)); }
+    const foRow  = remoteKegs.find(k => k && k.fieldOpsReports);
+    if (bbRow)  { breweryBeers    = bbRow.breweryBeers;    localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers)); }
+    if (khRow)  { kegHistory      = khRow.kegHistory;      localStorage.setItem('2down_keg_history',   JSON.stringify(kegHistory)); }
+    if (blRow)  { BEERS           = blRow.beers;            localStorage.setItem('2down_beers_v1',      JSON.stringify(BEERS)); }
+    if (rcRow)  { rateCard        = rcRow.rateCard;         localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
+    if (invRow) { invData         = invRow.invData;         localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
+    if (alRow)  { activityLog     = alRow.activityLog;      localStorage.setItem('2down_activity_log',  JSON.stringify(activityLog)); }
+    if (foRow)  { fieldOpsReports = foRow.fieldOpsReports;  localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports)); }
 
     if (kegRows.length > 0) {
       kegs = kegRows;
@@ -2845,6 +2847,7 @@ const NAV = [
   {id:'bars',      icon:'≡', label:'Bars'},
   {id:'ratecard',  icon:'₹', label:'Rate Card'},
   {id:'invoicing', icon:'🧾', label:'Invoicing'},
+  {id:'fieldops',  icon:'🔧', label:'Field Ops'},
   {id:'activity',  icon:'📋', label:'Activity Log'},
 ];
 
@@ -2938,6 +2941,7 @@ function _renderPage() {
     else if (currentTab==='bars') c.innerHTML = pageBars();
     else if (currentTab==='ratecard') c.innerHTML = pageRateCard();
     else if (currentTab==='invoicing') c.innerHTML = pageInvoicing();
+    else if (currentTab==='fieldops') c.innerHTML = pageFieldOps();
     else if (currentTab==='activity') c.innerHTML = pageActivity();
   } catch(e) {
     console.error('Render error on tab', currentTab, e);
@@ -2951,6 +2955,209 @@ let dashMonthOffset = 0;
 let dashView = 'week'; // 'week' or 'month'
 let dashWeekOffset = 0; // 0 = current week
 let dashExpandedBar = null;
+
+let fieldOpsBarId = null;
+let fieldOpsStep = 'select'; // 'select' | 'checklist'
+let fieldOpsSearch = '';
+let fieldOpsReports = []; // separate from activityLog
+
+async function saveFieldOpsReports() {
+  localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
+  try { await sbUpsert('kegs', '__fieldops_reports__', { fieldOpsReports }); } catch(_) {}
+}
+
+function pageFieldOps() {
+  // Load reports from localStorage if empty
+  if (fieldOpsReports.length === 0) {
+    try { const r = localStorage.getItem('2down_fieldops_reports'); if (r) fieldOpsReports = JSON.parse(r); } catch(_){}
+  }
+
+  const reportsPanel = `
+    <div class="card" style="width:300px;min-width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:20px">
+      <div class="section-title" style="margin-bottom:12px">Visit Reports</div>
+      ${fieldOpsReports.length === 0
+        ? `<div class="empty" style="font-size:12px">No reports submitted yet</div>`
+        : fieldOpsReports.slice().reverse().map(r => {
+            const ts = new Date(r.timestamp);
+            const dateStr = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+            const timeStr = ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+            return `<div style="padding:10px 0;border-bottom:1px solid var(--hover);cursor:pointer" onclick="showFieldOpsReport('${r.id}')">
+              <div style="font-weight:600;font-size:13px">${r.barName}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">${dateStr} at ${timeStr}</div>
+            </div>`;
+          }).join('')
+      }
+    </div>`;
+
+  if (fieldOpsStep === 'checklist') {
+    const bar = bars.find(b=>b.id===fieldOpsBarId)||{barName:'Unknown',area:''};
+    const barKegs = kegs.filter(k=>k.location===bar.barName).sort((a,b)=>(a.kegNo||'').localeCompare(b.kegNo||'',undefined,{numeric:true,sensitivity:'base'}));
+    const kegDeliveryMap = {...HISTORICAL_KEG_DATES};
+    orders.forEach(o=>(o.assignedKegs||[]).forEach(a=>{ if(!kegDeliveryMap[a.kegNo]||o.deliveryDate>kegDeliveryMap[a.kegNo]) kegDeliveryMap[a.kegNo]=o.deliveryDate; }));
+
+    const kegRows = barKegs.map((k,i)=>`
+      <tr style="${k.missing?'background:rgba(220,38,38,0.05)':''}">
+        <td style="text-align:center;color:var(--muted);font-size:12px">${i+1}</td>
+        <td style="font-family:monospace;font-weight:700;${k.missing?'color:var(--red)':''}">
+          ${k.kegNo}${k.missing?` <span style="font-size:9px;background:#fee2e2;color:var(--red);padding:1px 4px;border-radius:3px">MISSING</span>`:''}
+        </td>
+        <td style="font-size:12px">${k.size}L</td>
+        <td style="font-size:12px">${k.beer!=='Empty'?k.beer:'<span style="color:var(--muted)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--muted)">${kegDeliveryMap[k.kegNo]?fmtDate(kegDeliveryMap[k.kegNo]):'—'}</td>
+        <td style="text-align:center"><input type="checkbox" class="fo-keg-cb" data-keg="${k.kegNo}" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer"></td>
+      </tr>`).join('');
+
+    const checklist = `<div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm" onclick="fieldOpsStep='select';renderPage()">← Back</button>
+        <div>
+          <div style="font-size:18px;font-weight:700">${bar.barName}</div>
+          <div style="font-size:12px;color:var(--muted)">${bar.area} · Field Ops Checklist</div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title">Kegs Checklist</div>
+        <div style="overflow-x:auto">
+          <table class="tbl" style="font-size:13px">
+            <thead><tr><th>#</th><th>Keg No.</th><th>Size</th><th>Beer</th><th>Delivered</th><th style="text-align:center">✓</th></tr></thead>
+            <tbody>${kegRows||'<tr><td colspan="6" class="empty">No kegs at this bar</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:14px">Checklist</div>
+        <div style="display:grid;gap:12px">
+          <div><label class="lbl">Tap and Kegerator Condition</label>
+            <textarea id="fo-tap" class="inp" style="width:100%;height:65px;resize:vertical" placeholder="Notes on tap and kegerator condition…"></textarea></div>
+          <div><label class="lbl">CO₂ Pressure</label>
+            <textarea id="fo-co2" class="inp" style="width:100%;height:55px;resize:vertical" placeholder="Pressure readings, any issues…"></textarea></div>
+          <div><label class="lbl">Kegerator Temperature</label>
+            <input id="fo-temp" class="inp" placeholder="e.g. 4°C" style="width:160px"></div>
+          <div>
+            <label class="lbl">Staff Training Required?</label>
+            <div style="display:flex;gap:12px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="fo-training" value="Yes" onchange="document.getElementById('fo-training-date-row').style.display='block'" style="accent-color:var(--accent)"> Yes</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="fo-training" value="No" checked onchange="document.getElementById('fo-training-date-row').style.display='none'" style="accent-color:var(--accent)"> No</label>
+            </div>
+            <div id="fo-training-date-row" style="display:none;margin-top:10px">
+              <label class="lbl">Tentative Training Date</label>
+              <input id="fo-training-date" class="inp" type="text" placeholder="e.g. Next week, 15 Jun 2026…" style="width:260px">
+            </div>
+          </div>
+          <div><label class="lbl">Competitors' Beers on Tap</label>
+            <textarea id="fo-comp" class="inp" style="width:100%;height:55px;resize:vertical" placeholder="List any competitor beers on tap…"></textarea></div>
+          <div><label class="lbl">Menu Modification</label>
+            <textarea id="fo-menu" class="inp" style="width:100%;height:55px;resize:vertical" placeholder="Any changes needed to the menu…"></textarea></div>
+          <div><label class="lbl">Glassware · Coasters · Pitchers</label>
+            <textarea id="fo-merch" class="inp" style="width:100%;height:55px;resize:vertical" placeholder="Status of glassware, coasters, pitchers…"></textarea></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:10px">Additional Observations</div>
+        <textarea id="fo-obs" class="inp" style="width:100%;height:80px;resize:vertical" placeholder="Any other observations from the visit…"></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px" onclick="submitFieldOps('${bar.barName}',${barKegs.length})">
+        Submit Visit Report
+      </button>
+    </div>`;
+
+    return `<div style="display:flex;gap:20px;align-items:flex-start">${checklist}</div>`;
+  }
+
+  // Step 1: Bar selection with search
+  const activeBars = bars.filter(b=>b&&b.id&&!b.inactive).filter(b=>!fieldOpsSearch||b.barName.toLowerCase().includes(fieldOpsSearch.toLowerCase())).sort((a,b)=>a.barName.localeCompare(b.barName));
+  const opts = activeBars.map(b=>`
+    <label style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <input type="radio" name="fo-bar" value="${b.id}" style="accent-color:var(--accent);width:16px;height:16px">
+      <span style="font-weight:600;flex:1">${b.barName}</span>
+      <span style="font-size:12px;color:var(--muted)">${b.area||''}</span>
+    </label>`).join('');
+
+  const selectPanel = `<div style="flex:1;min-width:0">
+    <div class="card">
+      <div class="section-title" style="margin-bottom:4px">Field Ops Checklist</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Select a bar to begin the visit checklist</div>
+      <input class="inp" placeholder="Search bar…" value="${fieldOpsSearch}"
+        oninput="fieldOpsSearch=this.value;renderPage()" style="width:100%;margin-bottom:14px">
+      <div style="max-height:55vh;overflow-y:auto;margin-bottom:14px">${opts||'<div class="empty">No bars found</div>'}</div>
+      <button class="btn btn-primary" style="width:100%" onclick="
+        const sel=document.querySelector('input[name=fo-bar]:checked');
+        if(!sel){alert('Please select a bar.');return;}
+        fieldOpsBarId=Number(sel.value);fieldOpsStep='checklist';renderPage();">
+        Start Checklist →
+      </button>
+    </div>
+  </div>`;
+
+  return `<div style="display:flex;gap:20px;align-items:flex-start">${selectPanel}${reportsPanel}</div>`;
+}
+
+function showFieldOpsReport(id) {
+  const r = fieldOpsReports.find(x=>x.id===id);
+  if (!r) return;
+  const ts = new Date(r.timestamp).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const fields = [
+    ['Kegs Verified', r.kegs],
+    ['Tap and Kegerator Condition', r.tap],
+    ['CO₂ Pressure', r.co2],
+    ['Kegerator Temp', r.temp],
+    ['Staff Training', r.training + (r.trainingDate ? ` · Date: ${fmtDate(r.trainingDate)}` : '')],
+    ['Competitors', r.comp],
+    ['Menu Modification', r.menu],
+    ['Glassware · Coasters · Pitchers', r.merch],
+    ['Additional Observations', r.obs],
+    ['Notes', r.notes],
+  ].filter(([,v])=>v).map(([l,v])=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--hover)">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">${l}</div>
+      <div style="font-size:13px;margin-top:3px">${v}</div>
+    </div>`).join('');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:480px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+          <div>
+            <div style="font-size:18px;font-weight:700">${r.barName}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${ts}</div>
+          </div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
+        <div style="margin-top:14px;text-align:right">
+          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function submitFieldOps(barName, totalKegs) {
+  const checked = [...document.querySelectorAll('.fo-keg-cb:checked')].map(cb=>cb.dataset.keg);
+  const unchecked = [...document.querySelectorAll('.fo-keg-cb:not(:checked)')].map(cb=>cb.dataset.keg);
+  const report = {
+    id: uid(),
+    timestamp: new Date().toISOString(),
+    barName,
+    kegs: `${checked.length}/${totalKegs} verified${unchecked.length?' · Not found: '+unchecked.join(', '):''}`,
+    tap: document.getElementById('fo-tap')?.value?.trim()||'',
+    co2: document.getElementById('fo-co2')?.value?.trim()||'',
+    temp: document.getElementById('fo-temp')?.value?.trim()||'',
+    training: document.querySelector('input[name=fo-training]:checked')?.value||'No',
+    trainingDate: document.getElementById('fo-training-date')?.value||'',
+    comp: document.getElementById('fo-comp')?.value?.trim()||'',
+    menu: document.getElementById('fo-menu')?.value?.trim()||'',
+    merch: document.getElementById('fo-merch')?.value?.trim()||'',
+    obs: document.getElementById('fo-obs')?.value?.trim()||'',
+  };
+  fieldOpsReports.unshift(report);
+  saveFieldOpsReports();
+  fieldOpsStep = 'select';
+  fieldOpsBarId = null;
+  fieldOpsSearch = '';
+  renderPage();
+  setTimeout(()=>alert(`Visit report submitted for ${barName}!`),100);
+}
 
 let activityDateFilter = '';
 let activityActionFilter = 'all';
@@ -4324,8 +4531,7 @@ function pageKegs() {
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <input class="inp" id="kegs-search-inp" placeholder="Search keg no, location, beer…" value="${kegsSearch}" oninput="setKegsSearch(this.value)" style="width:260px">
       ${filterBtns}
-      <button class="btn btn-ghost" onclick="showBarChecklist()" style="margin-left:auto">📋 Bar Checklist</button>
-      <button class="btn btn-ghost" onclick="showChecklistLog()">Activity Log</button>
+      <button class="btn btn-ghost" onclick="showKegsByBar()" style="margin-left:auto">🏪 Filter by Bar</button>
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
@@ -4378,7 +4584,7 @@ function showOverdueKegs() {
 }
 
 function showChecklistLog() {
-  const allEntries = activityLog.filter(e => e.action === 'Bar Checklist Done')
+  const allEntries = activityLog.filter(e => e.action === 'Field Ops Visit' || e.action === 'Bar Checklist Done')
     .sort((a,b) => b.timestamp.localeCompare(a.timestamp));
 
   // Get unique dates and bars from entries
@@ -4440,6 +4646,47 @@ function showChecklistLog() {
         <div style="max-height:420px;overflow-y:auto">${rows}</div>
         <div style="margin-top:14px;text-align:right">
           <button onclick="closeModal()" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showKegsByBar() {
+  const barsWithKegs = bars.filter(b => !b.inactive && kegs.some(k => k.location === b.barName))
+    .sort((a,b) => a.barName.localeCompare(b.barName));
+
+  const options = barsWithKegs.map(b => {
+    const out = kegs.filter(k => k.location === b.barName && !k.missing).length;
+    const missing = kegs.filter(k => k.location === b.barName && k.missing).length;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <input type="radio" name="kgb-bar" value="${b.id}" style="accent-color:var(--accent)">
+      <span style="font-weight:600;flex:1">${b.barName}</span>
+      <span style="font-size:12px;color:var(--muted)">${out} keg${out!==1?'s':''} out${missing>0?` · <span style="color:var(--red)">${missing} missing</span>`:''}</span>
+    </label>`;
+  }).join('');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:420px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Filter by Bar</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="max-height:420px;overflow-y:auto;margin-bottom:14px">
+          ${options || '<div class="empty">No bars with kegs out</div>'}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="kegsSearch='';setKegsSearch('');closeModal()">Clear Filter</button>
+          <button class="btn btn-primary" onclick="
+            const sel=document.querySelector('input[name=kgb-bar]:checked');
+            if(!sel){alert('Please select a bar.');return;}
+            const b=bars.find(x=>x.id===Number(sel.value));
+            if(!b) return;
+            kegsSearch=b.barName;
+            closeModal();
+            renderPage();
+          ">Show Kegs</button>
         </div>
       </div>
     </div>`;
