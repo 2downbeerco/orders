@@ -4313,6 +4313,7 @@ function pageKegs() {
       <input class="inp" id="kegs-search-inp" placeholder="Search keg no, location, beer…" value="${kegsSearch}" oninput="setKegsSearch(this.value)" style="width:260px">
       ${filterBtns}
       <button class="btn btn-ghost" onclick="showBarChecklist()" style="margin-left:auto">📋 Bar Checklist</button>
+      <button class="btn btn-ghost" onclick="showChecklistLog()">Activity Log</button>
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
@@ -4364,6 +4365,74 @@ function showOverdueKegs() {
     </div>`;
 }
 
+function showChecklistLog() {
+  const allEntries = activityLog.filter(e => e.action === 'Bar Checklist Done')
+    .sort((a,b) => b.timestamp.localeCompare(a.timestamp));
+
+  // Get unique dates and bars from entries
+  const activeDates = [...new Set(allEntries.map(e => new Date(e.timestamp).toISOString().slice(0,10)))].sort((a,b)=>b.localeCompare(a));
+  const activeBars = [...new Set(allEntries.map(e => e.details.split(' · ')[0]))].sort();
+
+  // Read current filter state from DOM if modal is open
+  const dateFilter = document.getElementById('cl-date-filter')?.value || '';
+  const barFilter = document.getElementById('cl-bar-filter')?.value || '';
+
+  const filtered = allEntries.filter(e => {
+    if (dateFilter && new Date(e.timestamp).toISOString().slice(0,10) !== dateFilter) return false;
+    if (barFilter && !e.details.startsWith(barFilter)) return false;
+    return true;
+  });
+
+  const rows = filtered.length > 0
+    ? filtered.map(e => {
+        const ts = new Date(e.timestamp);
+        const dateStr = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+        const timeStr = ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+        return `<div style="display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:50%;background:#58A6FF18;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📋</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-weight:600;font-size:13px;color:#2563EB">Bar Checklist Done</span>
+              <span style="font-size:12px;color:var(--muted)">${dateStr} at ${timeStr}</span>
+            </div>
+            <div style="font-size:13px;color:var(--text);margin-top:2px">${e.details}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="empty">No checklist visits${dateFilter||barFilter?' matching filters':' recorded yet'}.</div>`;
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:520px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:18px;font-weight:700">📋 Bar Checklist Log</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <select id="cl-date-filter" class="inp" style="flex:1;min-width:140px;font-size:12px;padding:5px 10px"
+            onchange="showChecklistLog()">
+            <option value="">All dates</option>
+            ${activeDates.map(d => {
+              const label = new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+              return `<option value="${d}" ${dateFilter===d?'selected':''}>${label}</option>`;
+            }).join('')}
+          </select>
+          <select id="cl-bar-filter" class="inp" style="flex:1;min-width:140px;font-size:12px;padding:5px 10px"
+            onchange="showChecklistLog()">
+            <option value="">All bars</option>
+            ${activeBars.map(b=>`<option value="${b}" ${barFilter===b?'selected':''}>${b}</option>`).join('')}
+          </select>
+          ${dateFilter||barFilter ? `<button class="btn btn-ghost btn-sm" onclick="document.getElementById('cl-date-filter').value='';document.getElementById('cl-bar-filter').value='';showChecklistLog()">Clear</button>` : ''}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${filtered.length} of ${allEntries.length} visit${allEntries.length!==1?'s':''}</div>
+        <div style="max-height:420px;overflow-y:auto">${rows}</div>
+        <div style="margin-top:14px;text-align:right">
+          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function showBarChecklist() {
   const barsWithKegs = bars.filter(b => !b.inactive && kegs.some(k => k.location === b.barName && !k.missing))
     .sort((a,b) => a.barName.localeCompare(b.barName));
@@ -4402,11 +4471,11 @@ function doBarChecklist() {
   if (!bar) return;
   closeModal();
 
+  // Include both regular and missing kegs at this bar
   const barKegs = kegs
-    .filter(k => k.location === bar.barName && !k.missing)
-    .sort((a,b) => a.kegNo.localeCompare(b.kegNo, undefined, {numeric:true, sensitivity:'base'}));
+    .filter(k => k.location === bar.barName)
+    .sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
 
-  // Get delivery date from orders for each keg
   const kegDeliveryMap = {...HISTORICAL_KEG_DATES};
   orders.forEach(o => {
     (o.assignedKegs||[]).forEach(a => {
@@ -4416,16 +4485,19 @@ function doBarChecklist() {
   });
 
   const rows = barKegs.map((k, idx) => `
-    <tr>
+    <tr style="${k.missing?'background:rgba(220,38,38,0.05)':''}">
       <td style="text-align:center;color:var(--muted);font-size:12px">${idx+1}</td>
-      <td style="font-family:monospace;font-weight:700">${k.kegNo}</td>
+      <td style="font-family:monospace;font-weight:700;${k.missing?'color:var(--red)':''}">${k.kegNo}${k.missing?` <span style="font-size:9px;background:#fee2e2;color:var(--red);padding:1px 4px;border-radius:3px">MISSING</span>`:''}</td>
       <td style="font-size:13px">${k.size}L</td>
       <td style="font-size:13px">${k.beer !== 'Empty' ? k.beer : '<span style="color:var(--muted)">—</span>'}</td>
       <td style="font-size:12px;color:var(--muted)">${kegDeliveryMap[k.kegNo] ? fmtDate(kegDeliveryMap[k.kegNo]) : '—'}</td>
       <td style="text-align:center">
-        <input type="checkbox" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
+        <input type="checkbox" class="checklist-cb" data-keg="${k.kegNo}" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer">
       </td>
     </tr>`).join('');
+
+  const regularCount = barKegs.filter(k=>!k.missing).length;
+  const missingCount = barKegs.filter(k=>k.missing).length;
 
   document.getElementById('modal-container').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -4433,11 +4505,13 @@ function doBarChecklist() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
           <div>
             <div style="font-size:18px;font-weight:700">${bar.barName}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:3px">${bar.area} · ${barKegs.length} keg${barKegs.length!==1?'s':''} out</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">
+              ${bar.area} · ${regularCount} keg${regularCount!==1?'s':''} out${missingCount>0?` · <span style="color:var(--red)">${missingCount} missing</span>`:''}
+            </div>
           </div>
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
         </div>
-        <div style="max-height:500px;overflow-y:auto">
+        <div style="max-height:380px;overflow-y:auto">
           <table class="tbl" style="font-size:13px">
             <thead><tr>
               <th style="width:30px">#</th>
@@ -4450,12 +4524,27 @@ function doBarChecklist() {
             <tbody>${rows}</tbody>
           </table>
         </div>
-        <div style="margin-top:14px;text-align:right">
-          <button onclick="showBarChecklist()" class="btn btn-ghost btn-sm" style="margin-right:8px">← Back</button>
-          <button onclick="closeModal()" class="btn btn-primary">Done</button>
+        <div style="margin-top:12px">
+          <label class="lbl">Notes</label>
+          <textarea id="checklist-notes" class="inp" style="width:100%;height:70px;resize:vertical;font-size:13px" placeholder="Add any notes about this visit…"></textarea>
+        </div>
+        <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
+          <button onclick="showBarChecklist()" class="btn btn-ghost btn-sm">← Back</button>
+          <button onclick="completeBarChecklist('${bar.barName}',${barKegs.length})" class="btn btn-primary">Done</button>
         </div>
       </div>
     </div>`;
+}
+
+function completeBarChecklist(barName, totalKegs) {
+  const checked = [...document.querySelectorAll('.checklist-cb:checked')].map(cb => cb.dataset.keg);
+  const unchecked = [...document.querySelectorAll('.checklist-cb:not(:checked)')].map(cb => cb.dataset.keg);
+  const notes = document.getElementById('checklist-notes')?.value?.trim() || '';
+  let details = `${barName} · ${checked.length}/${totalKegs} kegs verified`;
+  if (unchecked.length > 0) details += ` · Not found: ${unchecked.join(', ')}`;
+  if (notes) details += ` · Notes: ${notes}`;
+  logActivity('Bar Checklist Done', details);
+  closeModal();
 }
 
 function filterReturnSuggestions(val) {
