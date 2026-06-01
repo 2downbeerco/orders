@@ -3252,11 +3252,19 @@ function pageOrders() {
     return `<option value="${offset}" ${offset===ordersWeekOffset?'selected':''}>${lbl}</option>`;
   }).join('');
 
-  const filtered = orders.slice().reverse().filter(o=>{
+  const filtered = orders.filter(o=>{
     const d = new Date(o.deliveryDate);
     const matchWeek = d >= wStart && d < wEnd;
     const matchSearch = !ordersSearch || (bars.find(x=>x.id===o.barId)||{barName:''}).barName.toLowerCase().includes(ordersSearch.toLowerCase());
     return matchWeek && matchSearch;
+  }).sort((a,b) => {
+    // Primary: delivery date descending
+    const dateDiff = b.deliveryDate.localeCompare(a.deliveryDate);
+    if (dateDiff !== 0) return dateDiff;
+    // Secondary: creation date descending
+    const ta = a.createdAt||a.deliveryDate||'';
+    const tb = b.createdAt||b.deliveryDate||'';
+    return tb.localeCompare(ta);
   });
 
   const rows = filtered.map(o=>{
