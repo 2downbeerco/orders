@@ -3767,7 +3767,7 @@ function pageNewOrder() {
         </div>
       </div>
       <div style="display:flex;gap:12px">
-        <button class="btn btn-primary" style="padding:12px 28px;font-size:13px" onclick="submitOrder()">${editOrderId ? 'UPDATE ORDER' : 'SAVE ORDER'}</button>
+        <button class="btn btn-primary" style="padding:12px 28px;font-size:13px" onclick="submitOrder(this)">${editOrderId ? 'UPDATE ORDER' : 'SAVE ORDER'}</button>
         <button class="btn btn-ghost" onclick="cancelOrderEdit()">Cancel</button>
       </div>
     </div>`;
@@ -3899,7 +3899,8 @@ function cancelOrderEdit() {
   goTo('new-order');
 }
 
-function submitOrder() {
+function submitOrder(btn) {
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   if (!newOrderState.barId) { alert('Please select a bar from the list.'); return; }
   const tp = Number(newOrderState.tpTotal)||0;
   const orderedTotal = newOrderState.items.reduce((s,i)=>s+Number(i.qty),0);
