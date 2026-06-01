@@ -5003,7 +5003,7 @@ function showBatchHistory(beerCode, batchNo) {
           <div>
             <div style="font-size:18px;font-weight:700">${beerCode} — Batch ${batchNo}</div>
             <div style="font-size:12px;color:#666;margin-top:4px">
-              ${brewDate ? `Brewed: <b>${fmtDate(brewDate)}</b> &nbsp;·&nbsp; ` : ''}${deliveries.length} deliver${deliveries.length!==1?'ies':'y'} · ${totalLitres}L dispatched
+              ${brewDate ? `Brewed: <b>${fmtDate(brewDate)}</b> &nbsp;·&nbsp; ` : ''}${batchEntry?.litres ? `Batch Size: <b>${batchEntry.litres}L</b> &nbsp;·&nbsp; ` : ''}${deliveries.length} deliver${deliveries.length!==1?'ies':'y'} · ${totalLitres}L dispatched
             </div>
           </div>
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999;line-height:1">&times;</button>
