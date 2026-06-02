@@ -3275,9 +3275,20 @@ function pageDashboard() {
   const monthOrders = allDashOrders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=mStart&&d<mEnd; });
   const weekOrders  = allDashOrders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=wStart&&d<wEnd; });
 
-  const monthKegs = monthOrders.reduce((s,o)=>s+(o.items||[]).reduce((ss,i)=>ss+i.qty,0),0);
+  // For stats: historical orders count their items; live orders only count if kegs are assigned
+  const countKegs = (o) => {
+    if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+i.qty,0);
+    return (o.assignedKegs||[]).length;
+  };
+  const countLitres = (o) => {
+    if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+i.qty*i.size,0);
+    return (o.assignedKegs||[]).reduce((s,a)=>s+(a.kegSize||a.fills?.reduce((ss,f)=>ss+f.litres,0)||0),0);
+  };
+  const hasKegs = (o) => o.source === 'historical' || (o.assignedKegs||[]).length > 0;
+
+  const monthKegs = monthOrders.reduce((s,o)=>s+countKegs(o),0);
   const monthTP   = monthOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
-  const weekKegs  = weekOrders.reduce((s,o)=>s+(o.items||[]).reduce((ss,i)=>ss+i.qty,0),0);
+  const weekKegs  = weekOrders.reduce((s,o)=>s+countKegs(o),0);
   const weekTP    = weekOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
 
 
@@ -3366,10 +3377,10 @@ function pageDashboard() {
       </div>
       <div class="grid4" style="margin-bottom:22px">
         ${[
-          ['No. of Orders',       weekOrders.length,                                            '#F5C842'],
-          ['Kegs Shipped',        weekKegs,                                                     '#E87C3E'],
-          ['Litres Shipped',      weekOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0)+'L', '#A3C96B'],
-          ['Bars',                new Set(weekOrders.map(o=>o.barId)).size,                     '#58A6FF'],
+          ['No. of Orders',       weekOrders.filter(hasKegs).length,                                '#F5C842'],
+          ['Kegs Shipped',        weekKegs,                                                         '#E87C3E'],
+          ['Litres Shipped',      weekOrders.reduce((s,o)=>s+countLitres(o),0)+'L',                '#A3C96B'],
+          ['Bars',                new Set(weekOrders.filter(hasKegs).map(o=>o.barId)).size,         '#58A6FF'],
         ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
       </div>
       <div class="grid2">
@@ -3400,9 +3411,9 @@ function pageDashboard() {
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px">
       ${[
-        [`${shortMonth} Orders`,  monthOrders.length, '#F5C842'],
+        [`${shortMonth} Orders`,  monthOrders.filter(hasKegs).length, '#F5C842'],
         ['Kegs Shipped',          monthKegs,          '#E87C3E'],
-        ['Litres Shipped',        monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0)+'L', '#A3C96B'],
+        ['Litres Shipped',        monthOrders.reduce((s,o)=>s+countLitres(o),0)+'L', '#A3C96B'],
         ['Delivery Weeks',        (() => { let count=0, d=new Date(mStart); while(d<mEnd){ if(d.getDay()===4) count++; d.setDate(d.getDate()+1); } return count; })(), '#58A6FF'],
         ['Avg Kegs / Order',      monthOrders.length?Math.round(monthKegs/monthOrders.length):0, '#E87C3E'],
       ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
