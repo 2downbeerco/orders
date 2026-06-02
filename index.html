@@ -3295,11 +3295,24 @@ function pageDashboard() {
   // Kegging summary
   const makeSummary = (orderList) => {
     const s = {};
-    orderList.forEach(o=>(o.items||[]).forEach(i=>{
-      if (!s[i.beer]) s[i.beer]={_20:0,_50:0};
-      s[i.beer]._20 += i.size===20?i.qty:0;
-      s[i.beer]._50 += i.size===50?i.qty:0;
-    }));
+    orderList.forEach(o => {
+      if (o.source === 'historical') {
+        (o.items||[]).forEach(i => {
+          if (!s[i.beer]) s[i.beer]={_20:0,_50:0};
+          s[i.beer]._20 += i.size===20?i.qty:0;
+          s[i.beer]._50 += i.size===50?i.qty:0;
+        });
+      } else {
+        (o.assignedKegs||[]).forEach(a => {
+          const beer = a.beer||'';
+          if (!beer) return;
+          if (!s[beer]) s[beer]={_20:0,_50:0};
+          const size = a.kegSize || 20;
+          s[beer]._20 += size===20?1:0;
+          s[beer]._50 += size===50?1:0;
+        });
+      }
+    });
     return s;
   };
   const summary = makeSummary(dashView==='week' ? weekOrders : monthOrders);
@@ -3309,20 +3322,23 @@ function pageDashboard() {
     if (!orderList.length) return `<div class="empty">${emptyMsg}</div>`;
     const barMap = {};
     orderList.forEach(o => {
+      if (!hasKegs(o)) return; // skip unassigned live orders
       const bid = o.barId;
       if (!barMap[bid]) barMap[bid] = { bar: bars.find(x=>x.id===bid)||{barName:'Unknown'}, orders:[] };
       barMap[bid].orders.push(o);
     });
     return Object.values(barMap)
-      .map(entry => ({...entry, totalKegs: entry.orders.reduce((s,o)=>s+(o.items||[]).reduce((ss,i)=>ss+i.qty,0),0)}))
+      .map(entry => ({...entry, totalKegs: entry.orders.reduce((s,o)=>s+countKegs(o),0)}))
       .sort((a,b) => b.totalKegs - a.totalKegs)
       .map(({bar, orders: bOrders, totalKegs}) => {
         const isOpen = dashExpandedBar === bar.id;
         const deliveryRows = bOrders
           .sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate))
           .map(o => {
-            const kegs = (o.items||[]).reduce((s,i)=>s+i.qty,0);
-            const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+            const kegs = countKegs(o);
+            const items = o.source === 'historical'
+              ? (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ')
+              : (o.assignedKegs||[]).map(a=>`${a.beer}${a.kegSize?` ${a.kegSize}L`:''}`).join(', ') || (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
             return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
               <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
               <span style="flex:1;color:var(--text)">${items}</span>
