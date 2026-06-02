@@ -4172,6 +4172,10 @@ function pageKegging() {
     summary[i.beer]._50 += i.size===50?i.qty:0;
   }));
 
+  const totalKegsNeeded = filtered.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty,s),0);
+  const total20L = filtered.reduce((s,o)=>(o.items||[]).filter(i=>i.size===20).reduce((ss,i)=>ss+i.qty,s),0);
+  const total50L = filtered.reduce((s,o)=>(o.items||[]).filter(i=>i.size===50).reduce((ss,i)=>ss+i.qty,s),0);
+
   const sumRows = BEERS.filter(b=>!b.inactive)
     .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
     .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
@@ -4190,21 +4194,24 @@ function pageKegging() {
     <th style="font-size:9px;padding-top:2px">20L</th>
     <th style="font-size:9px;padding-top:2px">50L</th>`).join('');
 
-  const detailRows = filtered.map(o=>{
+  const detailRows = filtered.slice().sort((a,b)=>{
+    const na = (bars.find(x=>x.id===a.barId)||{barName:'?'}).barName;
+    const nb = (bars.find(x=>x.id===b.barId)||{barName:'?'}).barName;
+    return na.localeCompare(nb);
+  }).map(o=>{
     const b = bars.find(x=>x.id===o.barId)||{barName:'?',area:''};
-    const cols = BEERS.filter(b=>!b.inactive).map(beer=>{
-      const q20=(o.items||[]).find(i=>i.beer===beer.code&&i.size===20)?.qty||0;
-      const q50=(o.items||[]).find(i=>i.beer===beer.code&&i.size===50)?.qty||0;
-      return `
-        <td style="text-align:center;color:${q20?'var(--accent)':'var(--border)'};font-weight:${q20?700:400}">${q20||'--'}</td>
-        <td style="text-align:center;color:${q50?'var(--accent)':'var(--border)'};font-weight:${q50?700:400}">${q50||'--'}</td>`;
-    }).join('');
+    const itemStr = (o.items||[]).map(i=>{
+      const beerInfo = BEERS.find(b=>b.code===i.beer);
+      const color = beerInfo?.color || '#888';
+      return `${badge(i.beer, color)} <span style="font-size:12px">${i.size}L × ${i.qty}</span>`;
+    }).join(' &nbsp;');
+    const totalKegs = (o.items||[]).reduce((s,i)=>s+i.qty,0);
     return `<tr>
-      <td><b>${b.barName}</b></td>
-      <td style="color:var(--muted);font-size:12px">${b.area}</td>
-      ${cols}
+      <td style="font-weight:600">${b.barName}</td>
+      <td style="font-size:13px;color:var(--muted)">${itemStr}</td>
+      <td style="text-align:center;font-weight:700;color:var(--accent)">${totalKegs}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="13" class="empty">No orders for this delivery date</td></tr>`;
+  }).join('') || `<tr><td colspan="3" class="empty">No orders for this delivery date</td></tr>`;
 
   const dateOpts = allDates.map(d=>`<option value="${d}" ${d===keggingDate?'selected':''}>${fmtDate(d)}</option>`).join('');
 
@@ -4221,7 +4228,13 @@ function pageKegging() {
       <div class="tbl-wrap">
         <table class="tbl">
           <thead><tr><th>Beer</th><th>20L Kegs</th><th>50L Kegs</th><th>Total Litres</th></tr></thead>
-          <tbody>${sumRows||`<tr><td colspan="4" class="empty">No orders for this date</td></tr>`}</tbody>
+          <tbody>${sumRows||`<tr><td colspan="4" class="empty">No orders for this date</td></tr>`}
+          <tr style="border-top:2px solid var(--border);background:var(--hover)">
+            <td style="font-weight:700">Total</td>
+            <td style="font-weight:800;color:var(--accent);font-size:15px">${total20L}</td>
+            <td style="font-weight:800;color:var(--accent);font-size:15px">${total50L}</td>
+            <td style="font-weight:700">${total20L*20+total50L*50}L</td>
+          </tr></tbody>
         </table>
       </div>
     </div>
@@ -4229,10 +4242,7 @@ function pageKegging() {
       <div style="padding:16px 20px 0"><div class="section-title">Per-Bar Breakdown — ${fmtDate(keggingDate)}</div></div>
       <div class="tbl-wrap">
         <table class="tbl">
-          <thead>
-            <tr><th rowspan="2">Bar</th><th rowspan="2">Area</th>${beerCols}</tr>
-            <tr>${beerSubCols}</tr>
-          </thead>
+          <thead><tr><th>Bar</th><th>Beer</th><th style="text-align:center">Kegs</th></tr></thead>
           <tbody>${detailRows}</tbody>
         </table>
       </div>
