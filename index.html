@@ -4698,6 +4698,63 @@ function showChecklistLog() {
     </div>`;
 }
 
+function openKegTableWithRoute(date) {
+  const kegDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDates[a.kegNo] || o.deliveryDate > kegDates[a.kegNo])
+        kegDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
+  const routeBars = window._routeBars || [];
+  const allKegs = kegs.filter(k => k.location !== 'Brewery' && kegDates[k.kegNo] === date);
+
+  const rows = routeBars.map((barName, idx) => {
+    const barKegs = allKegs.filter(k => k.location === barName)
+      .sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
+    const b = bars.find(x => x.barName === barName) || {};
+    return barKegs.map((k, ki) => `
+      <tr style="${k.missing?'background:#fff5f5':''}">
+        ${ki === 0 ? `<td rowspan="${barKegs.length}" style="font-weight:700;font-size:16px;text-align:center;color:#D4821A;vertical-align:top;padding-top:14px">${idx+1}</td>
+          <td rowspan="${barKegs.length}" style="font-weight:700;vertical-align:top;padding-top:14px">${barName}<br><span style="font-weight:400;font-size:11px;color:#888">${b.area||''}</span></td>` : ''}
+        <td style="font-family:monospace;font-weight:700;${k.missing?'color:#dc2626':''}">${k.kegNo}${k.missing?' <span style="color:#dc2626">[MISSING]</span>':''}</td>
+        <td>${k.size}L</td>
+        <td>${k.beer !== 'Empty' ? k.beer : '—'}</td>
+      </tr>`).join('');
+  }).join('');
+
+  const totalKegs = allKegs.length;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>2 Down Beer Co. — Delivery Route ${fmtDate(date)}</title>
+    <style>
+      body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 32px; color: #1a1714; font-size: 13px; }
+      h2 { font-size: 20px; margin-bottom: 4px; font-weight: 800; }
+      .meta { color: #888; margin-bottom: 24px; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; padding: 8px 12px; background: #1a1714; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; }
+      td { padding: 10px 12px; border-bottom: 1px solid #e8e5df; vertical-align: middle; }
+      tr:last-child td { border-bottom: 2px solid #1a1714; }
+      footer { margin-top: 28px; font-size: 11px; color: #aaa; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  </head><body>
+    <h2>2 Down Beer Co. — Delivery Route</h2>
+    <div class="meta">Delivery: <b>${fmtDate(date)}</b> &nbsp;·&nbsp; ${routeBars.length} stops &nbsp;·&nbsp; ${totalKegs} kegs &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</div>
+    <table>
+      <thead><tr><th>#</th><th>Bar</th><th>Keg No.</th><th>Size</th><th>Beer</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <footer>2 Down Brewing Co. · Delivery Schedule</footer>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+}
+
 function openKegTable(filter, type) {
   const kegDates = {...HISTORICAL_KEG_DATES};
   orders.forEach(o => {
@@ -4818,42 +4875,62 @@ function showKegsByDateResult(date) {
   const matched = kegs.filter(k => k.location !== 'Brewery' && kegDates[k.kegNo] === date)
     .sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
 
-  const rows = matched.map((k, i) => `
-    <tr style="${k.missing?'background:rgba(220,38,38,0.05)':''}">
-      <td style="text-align:center;color:var(--muted);font-size:12px">${i+1}</td>
-      <td style="font-family:monospace;font-weight:700;${k.missing?'color:var(--red)':''}">
-        ${k.kegNo}${k.missing?` <span style="font-size:9px;background:#fee2e2;color:var(--red);padding:1px 4px;border-radius:3px">MISSING</span>`:''}
-      </td>
-      <td style="font-size:13px">${k.size}L</td>
-      <td style="font-weight:600">${k.location}</td>
-      <td style="font-size:13px;color:${k.beer==='Empty'?'var(--muted)':'var(--text)'}">${k.beer}</td>
-    </tr>`).join('');
+  // Group kegs by bar
+  const barOrder = {};
+  matched.forEach(k => {
+    if (!barOrder[k.location]) barOrder[k.location] = [];
+    barOrder[k.location].push(k);
+  });
+  const barNames = Object.keys(barOrder).sort();
+
+  // Store route order globally for drag state
+  window._routeBars = [...barNames];
+
+  const renderRouteList = () => {
+    const list = document.getElementById('route-list');
+    if (!list) return;
+    list.innerHTML = window._routeBars.map((name, i) => {
+      const barKegs = barOrder[name] || [];
+      const kegCount = barKegs.length;
+      const missing = barKegs.filter(k=>k.missing).length;
+      return `<div class="route-item" draggable="true" data-name="${name}"
+          style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface);cursor:grab;user-select:none"
+          ondragstart="window._dragIdx=${i};this.style.opacity='0.4'"
+          ondragend="this.style.opacity='1'"
+          ondragover="event.preventDefault()"
+          ondrop="event.preventDefault();const from=window._dragIdx,to=${i};if(from!==to){const b=window._routeBars.splice(from,1)[0];window._routeBars.splice(to,0,b);window._renderRouteList();}">
+        <span style="font-size:18px;color:var(--muted);cursor:grab">⠿</span>
+        <span style="font-size:15px;font-weight:700;min-width:24px;color:var(--accent)">${i+1}</span>
+        <span style="font-weight:600;flex:1">${name}</span>
+        <span style="font-size:12px;color:var(--muted)">${kegCount} keg${kegCount!==1?'s':''}${missing>0?` · <span style="color:var(--red)">${missing} missing</span>`:''}</span>
+      </div>`;
+    }).join('');
+  };
+
+  window._renderRouteList = renderRouteList;
 
   document.getElementById('modal-container').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal-box" style="max-width:560px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div class="modal-box" style="max-width:480px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
           <div>
-            <div style="font-size:18px;font-weight:700">Delivered ${fmtDate(date)}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:3px">${matched.length} keg${matched.length!==1?'s':''} out</div>
+            <div style="font-size:18px;font-weight:700">Set Route — ${fmtDate(date)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">${barNames.length} bars · ${matched.length} kegs · Drag to reorder</div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="openKegTable('${date}', 'date')">⎙ View Table</button>
-            <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
-          </div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
         </div>
-        <div style="max-height:480px;overflow-y:auto">
-          <table class="tbl" style="font-size:13px">
-            <thead><tr><th>#</th><th>Keg No.</th><th>Size</th><th>Location</th><th>Beer</th></tr></thead>
-            <tbody>${rows||'<tr><td colspan="5" class="empty">No kegs found</td></tr>'}</tbody>
-          </table>
-        </div>
-        <div style="margin-top:14px;display:flex;justify-content:space-between">
+        <div id="route-list" style="max-height:460px;overflow-y:auto;margin:14px 0"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
           <button onclick="showKegsByDate()" class="btn btn-ghost btn-sm">← Back</button>
-          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="openKegTable('${date}', 'date')">⎙ View Table (No Route)</button>
+            <button class="btn btn-primary btn-sm" onclick="openKegTableWithRoute('${date}')">⎙ View Table with Route</button>
+          </div>
         </div>
       </div>
     </div>`;
+
+  renderRouteList();
 }
 
 function showKegsByBar() {
