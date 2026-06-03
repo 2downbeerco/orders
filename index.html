@@ -4413,11 +4413,20 @@ async function saveBreweryBeers() {
 function pageKegs() {
   const sizeFiltered = kegs.filter(k => k && k.kegNo && (kegsSize === 'all' || k.size === Number(kegsSize)));
 
+  const kegDeliveryDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDeliveryDates[a.kegNo] || o.deliveryDate > kegDeliveryDates[a.kegNo])
+        kegDeliveryDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
   const filtered = sizeFiltered.filter(k => {
     const matchSearch = !kegsSearch ||
       k.kegNo.toLowerCase().includes(kegsSearch.toLowerCase()) ||
       k.location.toLowerCase().includes(kegsSearch.toLowerCase()) ||
-      k.beer.toLowerCase().includes(kegsSearch.toLowerCase());
+      k.beer.toLowerCase().includes(kegsSearch.toLowerCase()) ||
+      (kegDeliveryDates[k.kegNo]||'').includes(kegsSearch);
     const matchFilter =
       kegsFilter === 'all' ? true :
       kegsFilter === 'brewery' ? k.location === 'Brewery' :
@@ -4429,14 +4438,6 @@ function pageKegs() {
   const totalAtBrewery = sizeFiltered.filter(k=>k.location==='Brewery').length;
   const totalOut = sizeFiltered.filter(k=>k.location!=='Brewery'&&!k.missing).length;
   const totalMissing = sizeFiltered.filter(k=>k.missing).length;
-
-  const kegDeliveryDates = {...HISTORICAL_KEG_DATES};
-  orders.forEach(o => {
-    (o.assignedKegs||[]).forEach(a => {
-      if (!kegDeliveryDates[a.kegNo] || o.deliveryDate > kegDeliveryDates[a.kegNo])
-        kegDeliveryDates[a.kegNo] = o.deliveryDate;
-    });
-  });
 
   const rows = filtered.map(k => {
     const isEditing = editingKegNo === k.kegNo;
@@ -4577,6 +4578,7 @@ function pageKegs() {
       <input class="inp" id="kegs-search-inp" placeholder="Search keg no, location, beer…" value="${kegsSearch}" oninput="setKegsSearch(this.value)" style="width:260px">
       ${filterBtns}
       <button class="btn btn-ghost" onclick="showKegsByBar()" style="margin-left:auto">🏪 Filter by Bar</button>
+      <button class="btn btn-ghost" onclick="showKegsByDate()">📅 Filter by Date</button>
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
@@ -4696,6 +4698,164 @@ function showChecklistLog() {
     </div>`;
 }
 
+function openKegTable(filter, type) {
+  const kegDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDates[a.kegNo] || o.deliveryDate > kegDates[a.kegNo])
+        kegDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
+  let title, filteredKegs;
+  if (type === 'bar') {
+    const bar = bars.find(b => b.id === filter);
+    title = bar ? bar.barName : 'Bar';
+    filteredKegs = kegs.filter(k => k.location === (bar?.barName||''));
+  } else {
+    title = `Delivered ${fmtDate(filter)}`;
+    filteredKegs = kegs.filter(k => k.location !== 'Brewery' && kegDates[k.kegNo] === filter);
+  }
+  filteredKegs = filteredKegs.sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
+
+  const rows = filteredKegs.map((k, i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td><b>${k.kegNo}</b>${k.missing?' <span style="color:#dc2626;font-size:11px">MISSING</span>':''}</td>
+      <td>${k.size}L</td>
+      <td>${k.location}</td>
+      <td>${k.beer !== 'Empty' ? k.beer : '—'}</td>
+      <td>${kegDates[k.kegNo] ? new Date(kegDates[k.kegNo]+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>2 Down Beer Co. — ${title}</title>
+    <style>
+      body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 30px; color: #1a1714; font-size: 13px; }
+      h2 { font-size: 18px; margin-bottom: 4px; }
+      p { color: #888; margin-bottom: 20px; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; padding: 8px 12px; background: #1a1714; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; }
+      td { padding: 9px 12px; border-bottom: 1px solid #e8e5df; }
+      tr:nth-child(even) { background: #f6f5f2; }
+      .missing { color: #dc2626; font-weight: 700; }
+      footer { margin-top: 24px; font-size: 11px; color: #aaa; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  </head><body>
+    <h2>2 Down Beer Co.</h2>
+    <p>${title} · ${filteredKegs.length} keg${filteredKegs.length!==1?'s':''} · Generated: ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</p>
+    <table>
+      <thead><tr><th>#</th><th>Keg No.</th><th>Size</th><th>Location</th><th>Beer</th><th>Last Delivery</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <footer>2 Down Brewing Co.</footer>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+}
+
+function showKegsByDate() {
+  const kegDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDates[a.kegNo] || o.deliveryDate > kegDates[a.kegNo])
+        kegDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
+  const outKegs = kegs.filter(k => k.location !== 'Brewery' && kegDates[k.kegNo]);
+  const dateMap = {};
+  outKegs.forEach(k => {
+    const d = kegDates[k.kegNo];
+    if (!dateMap[d]) dateMap[d] = 0;
+    dateMap[d]++;
+  });
+  const sortedDates = Object.entries(dateMap).sort((a,b) => b[0].localeCompare(a[0]));
+
+  const options = sortedDates.map(([d, count]) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <input type="radio" name="kgd-date" value="${d}" style="accent-color:var(--accent)">
+      <span style="font-weight:600;flex:1">${fmtDate(d)}</span>
+      <span style="font-size:12px;color:var(--muted)">${count} keg${count!==1?'s':''}</span>
+    </label>`).join('');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:380px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Filter by Delivery Date</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="max-height:420px;overflow-y:auto;margin-bottom:14px">
+          ${options || '<div class="empty">No delivery dates found</div>'}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="
+            const sel=document.querySelector('input[name=kgd-date]:checked');
+            if(!sel){alert('Please select a date.');return;}
+            showKegsByDateResult(sel.value);
+          ">View Kegs</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showKegsByDateResult(date) {
+  const kegDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDates[a.kegNo] || o.deliveryDate > kegDates[a.kegNo])
+        kegDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
+  const matched = kegs.filter(k => k.location !== 'Brewery' && kegDates[k.kegNo] === date)
+    .sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
+
+  const rows = matched.map((k, i) => `
+    <tr style="${k.missing?'background:rgba(220,38,38,0.05)':''}">
+      <td style="text-align:center;color:var(--muted);font-size:12px">${i+1}</td>
+      <td style="font-family:monospace;font-weight:700;${k.missing?'color:var(--red)':''}">
+        ${k.kegNo}${k.missing?` <span style="font-size:9px;background:#fee2e2;color:var(--red);padding:1px 4px;border-radius:3px">MISSING</span>`:''}
+      </td>
+      <td style="font-size:13px">${k.size}L</td>
+      <td style="font-weight:600">${k.location}</td>
+      <td style="font-size:13px;color:${k.beer==='Empty'?'var(--muted)':'var(--text)'}">${k.beer}</td>
+    </tr>`).join('');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:560px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+          <div>
+            <div style="font-size:18px;font-weight:700">Delivered ${fmtDate(date)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">${matched.length} keg${matched.length!==1?'s':''} out</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="openKegTable('${date}', 'date')">⎙ View Table</button>
+            <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+          </div>
+        </div>
+        <div style="max-height:480px;overflow-y:auto">
+          <table class="tbl" style="font-size:13px">
+            <thead><tr><th>#</th><th>Keg No.</th><th>Size</th><th>Location</th><th>Beer</th></tr></thead>
+            <tbody>${rows||'<tr><td colspan="5" class="empty">No kegs found</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px;display:flex;justify-content:space-between">
+          <button onclick="showKegsByDate()" class="btn btn-ghost btn-sm">← Back</button>
+          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function showKegsByBar() {
   const barsWithKegs = bars.filter(b => !b.inactive && kegs.some(k => k.location === b.barName))
     .sort((a,b) => a.barName.localeCompare(b.barName));
@@ -4722,16 +4882,70 @@ function showKegsByBar() {
           ${options || '<div class="empty">No bars with kegs out</div>'}
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn btn-ghost" onclick="kegsSearch='';setKegsSearch('');closeModal()">Clear Filter</button>
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
           <button class="btn btn-primary" onclick="
             const sel=document.querySelector('input[name=kgb-bar]:checked');
             if(!sel){alert('Please select a bar.');return;}
-            const b=bars.find(x=>x.id===Number(sel.value));
-            if(!b) return;
-            kegsSearch=b.barName;
-            closeModal();
-            renderPage();
-          ">Show Kegs</button>
+            showKegsByBarResult(Number(sel.value));
+          ">View Kegs</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showKegsByBarResult(barId) {
+  const bar = bars.find(b => b.id === barId);
+  if (!bar) return;
+
+  const kegDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDates[a.kegNo] || o.deliveryDate > kegDates[a.kegNo])
+        kegDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
+  const barKegs = kegs.filter(k => k.location === bar.barName)
+    .sort((a,b) => (a.kegNo||'').localeCompare(b.kegNo||'', undefined, {numeric:true, sensitivity:'base'}));
+
+  const rows = barKegs.map((k, i) => `
+    <tr style="${k.missing?'background:rgba(220,38,38,0.05)':''}">
+      <td style="text-align:center;color:var(--muted);font-size:12px">${i+1}</td>
+      <td style="font-family:monospace;font-weight:700;${k.missing?'color:var(--red)':''}">
+        ${k.kegNo}${k.missing?` <span style="font-size:9px;background:#fee2e2;color:var(--red);padding:1px 4px;border-radius:3px">MISSING</span>`:''}
+      </td>
+      <td style="font-size:13px">${k.size}L</td>
+      <td style="font-size:13px;color:${k.beer==='Empty'?'var(--muted)':'var(--text)'}">${k.beer}</td>
+      <td style="font-size:12px;color:var(--muted)">${kegDates[k.kegNo]?fmtDate(kegDates[k.kegNo]):'—'}</td>
+    </tr>`).join('');
+
+  const outCount = barKegs.filter(k=>!k.missing).length;
+  const missingCount = barKegs.filter(k=>k.missing).length;
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:520px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+          <div>
+            <div style="font-size:18px;font-weight:700">${bar.barName}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">
+              ${bar.area} · ${outCount} keg${outCount!==1?'s':''} out${missingCount>0?` · <span style="color:var(--red)">${missingCount} missing</span>`:''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="openKegTable(${barId}, 'bar')">⎙ View Table</button>
+            <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+          </div>
+        </div>
+        <div style="max-height:460px;overflow-y:auto">
+          <table class="tbl" style="font-size:13px">
+            <thead><tr><th>#</th><th>Keg No.</th><th>Size</th><th>Beer</th><th>Delivered</th></tr></thead>
+            <tbody>${rows||'<tr><td colspan="5" class="empty">No kegs at this bar</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px;display:flex;justify-content:space-between">
+          <button onclick="showKegsByBar()" class="btn btn-ghost btn-sm">← Back</button>
+          <button onclick="closeModal()" class="btn btn-primary">Close</button>
         </div>
       </div>
     </div>`;
