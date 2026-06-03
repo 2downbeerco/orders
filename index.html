@@ -4430,9 +4430,22 @@ function pageKegs() {
   const totalOut = sizeFiltered.filter(k=>k.location!=='Brewery'&&!k.missing).length;
   const totalMissing = sizeFiltered.filter(k=>k.missing).length;
 
+  const kegDeliveryDates = {...HISTORICAL_KEG_DATES};
+  orders.forEach(o => {
+    (o.assignedKegs||[]).forEach(a => {
+      if (!kegDeliveryDates[a.kegNo] || o.deliveryDate > kegDeliveryDates[a.kegNo])
+        kegDeliveryDates[a.kegNo] = o.deliveryDate;
+    });
+  });
+
   const rows = filtered.map(k => {
     const isEditing = editingKegNo === k.kegNo;
     const rowBg = k.missing ? 'background:rgba(220,38,38,0.05)' : '';
+    const isOut = k.location !== 'Brewery' && !k.missing;
+    const deliveryDate = kegDeliveryDates[k.kegNo];
+    const deliveryCell = isOut
+      ? `<td style="font-size:12px;color:var(--muted)">${deliveryDate ? fmtDate(deliveryDate) : '—'}</td>`
+      : `<td></td>`;
     if (isEditing) {
       return `<tr style="${rowBg};background:rgba(212,130,26,0.05)">
         <td style="font-weight:700;font-family:monospace;${k.missing?'color:var(--red)':''}">${k.kegNo}${k.missing?` <span style="font-size:10px;background:#fee2e2;color:var(--red);padding:1px 6px;border-radius:4px;font-family:var(--sans)">MISSING</span>`:''}</td>
@@ -4454,6 +4467,7 @@ function pageKegs() {
             ${breweryBeers.filter(bb=>bb&&!bb.inactive).map(bb=>`<option value="${bb.beer}${bb.batch}">`).join('')}
           </datalist>
         </td>
+        ${deliveryCell}
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-sm ${k.missing?'btn-ghost':'btn-danger'}" onclick="toggleMissing('${k.kegNo}')" style="${k.missing?'color:var(--green);border-color:var(--green)':''}">
@@ -4470,6 +4484,7 @@ function pageKegs() {
       <td style="font-size:13px;color:var(--muted)">${k.make}</td>
       <td style="font-weight:${k.location==='Brewery'?'400':'600'};color:${k.location==='Brewery'?'var(--green)':'var(--text)'}">${k.location}</td>
       <td style="font-size:13px;color:${k.beer==='Empty'?'var(--muted)':'var(--text)'};font-weight:${k.beer==='Empty'?'400':'600'}">${k.beer}</td>
+      ${deliveryCell}
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn btn-ghost btn-sm" onclick="editingKegNo='${k.kegNo}';renderPage()">✎ Edit</button>
@@ -4477,7 +4492,7 @@ function pageKegs() {
         </div>
       </td>
     </tr>`;
-  }).join('') || `<tr><td colspan="6" class="empty">No kegs found</td></tr>`;
+  }).join('') || `<tr><td colspan="7" class="empty">No kegs found</td></tr>`;
 
   const sizeTabs = `
     <div style="display:flex;gap:2px;background:var(--hover);border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px">
@@ -4538,15 +4553,6 @@ function pageKegs() {
   const now = new Date();
   const twoMonthsAgo = new Date(now); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
 
-  const kegDeliveryDates = {...HISTORICAL_KEG_DATES};
-  orders.forEach(o => {
-    (o.assignedKegs||[]).forEach(a => {
-      // Live orders override historical dates
-      if (!kegDeliveryDates[a.kegNo] || o.deliveryDate > kegDeliveryDates[a.kegNo])
-        kegDeliveryDates[a.kegNo] = o.deliveryDate;
-    });
-  });
-
   const overdueKegs = kegs.filter(k =>
     k.location !== 'Brewery' && !k.missing &&
     kegDeliveryDates[k.kegNo] && new Date(kegDeliveryDates[k.kegNo]) < twoMonthsAgo
@@ -4576,7 +4582,7 @@ function pageKegs() {
       <div class="tbl-wrap">
         <table class="tbl">
           <thead><tr>
-            <th>Keg No.</th>${kegsSize==='all'?'<th>Size</th>':''}<th>Make</th><th>Location</th><th>Beer</th><th></th>
+            <th>Keg No.</th>${kegsSize==='all'?'<th>Size</th>':''}<th>Make</th><th>Location</th><th>Beer</th><th>Last Delivery</th><th></th>
           </tr></thead>
           <tbody id="kegs-tbody">${rows.replace(/<td style="font-size:13px">\d+L<\/td>/g, kegsSize==='all' ? '$&' : '')}</tbody>
         </table>
