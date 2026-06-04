@@ -4933,6 +4933,112 @@ function showKegsByDateResult(date) {
   renderRouteList();
 }
 
+let barHistoryMonthOffset = 0;
+
+function showBarOrderHistory(barId) {
+  barHistoryMonthOffset = 0;
+  renderBarHistoryModal(barId);
+}
+
+function renderBarHistoryModal(barId) {
+  const bar = bars.find(b => b.id === barId);
+  if (!bar) return;
+
+  const allBarOrders = [...orders, ...HISTORICAL_ORDERS].filter(o => o.barId === barId);
+
+  // Get available months
+  const monthSet = new Set(allBarOrders.map(o => o.deliveryDate.slice(0,7)));
+  const months = [...monthSet].sort((a,b)=>b.localeCompare(a));
+
+  // Current selected month
+  const now = new Date();
+  const selDate = new Date(now.getFullYear(), now.getMonth() + barHistoryMonthOffset, 1);
+  const selKey = selDate.toISOString().slice(0,7);
+  const selLabel = selDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
+  const isCurrentMonth = barHistoryMonthOffset === 0;
+
+  const monthOrders = allBarOrders.filter(o => o.deliveryDate.startsWith(selKey))
+    .sort((a,b) => a.deliveryDate.localeCompare(b.deliveryDate));
+
+  // Delivery rows
+  const deliveryRows = monthOrders.map(o => {
+    const items = (o.items||[]).map(i => `<span style="margin-right:10px">${badge(i.beer,beerColor(i.beer))} <span style="font-size:12px">${i.size}L × ${i.qty}</span></span>`).join('');
+    const totalKegs = (o.items||[]).reduce((s,i)=>s+i.qty,0);
+    return `<div style="padding:12px 0;border-bottom:1px solid var(--hover)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:600;font-size:13px">${fmtDate(o.deliveryDate)}</span>
+        <span style="font-size:12px;color:var(--muted)">${totalKegs} keg${totalKegs!==1?'s':''}</span>
+      </div>
+      <div>${items}</div>
+    </div>`;
+  }).join('');
+
+  // Consolidated beer totals
+  const beerTotals = {};
+  monthOrders.forEach(o => {
+    (o.items||[]).forEach(i => {
+      const key = i.beer + '_' + i.size;
+      if (!beerTotals[key]) beerTotals[key] = {beer:i.beer, size:i.size, qty:0};
+      beerTotals[key].qty += i.qty;
+    });
+  });
+  const totalKegsMonth = monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty,s),0);
+  const totalLitresMonth = monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0);
+  const totalRows = Object.values(beerTotals).sort((a,b)=>a.beer.localeCompare(b.beer)).map(t =>
+    `<tr>
+      <td>${badge(t.beer, beerColor(t.beer))} ${BEERS.find(b=>b.code===t.beer)?.name||t.beer}</td>
+      <td>${t.size}L</td>
+      <td style="font-weight:700;color:var(--accent)">${t.qty}</td>
+      <td style="color:var(--muted)">${t.qty*t.size}L</td>
+    </tr>`
+  ).join('') + `<tr style="border-top:2px solid var(--border);background:var(--hover)">
+    <td colspan="2" style="font-weight:700">Total</td>
+    <td style="font-weight:800;color:var(--accent);font-size:15px">${totalKegsMonth}</td>
+    <td style="font-weight:700">${totalLitresMonth}L</td>
+  </tr>`;
+  const summarySection = monthOrders.length === 0
+    ? `<div class="empty">No deliveries in ${selLabel}</div>`
+    : `<div style="max-height:300px;overflow-y:auto;margin-bottom:16px">${deliveryRows}</div>
+       <div style="border-top:2px solid var(--border);padding-top:14px">
+         <div class="section-title" style="margin-bottom:10px">Summary — ${selLabel} · ${totalKegsMonth} kegs</div>
+         <table class="tbl" style="font-size:13px">
+           <thead><tr><th>Beer</th><th>Size</th><th>Kegs</th><th>Litres</th></tr></thead>
+           <tbody>${totalRows}</tbody>
+         </table>
+       </div>`;
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:560px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+          <div>
+            <div style="font-size:18px;font-weight:700">${bar.barName}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${bar.area}${bar.licType?' · '+bar.licType:''}</div>
+          </div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <button class="btn btn-ghost btn-sm" onclick="barHistoryMonthOffset--;renderBarHistoryModal(${barId})">‹</button>
+          <select class="inp" style="flex:1;font-size:13px;font-weight:600" onchange="barHistoryMonthOffset=parseInt(this.value);renderBarHistoryModal(${barId})">
+            ${months.map(m => {
+              const md = new Date(m+'-01T00:00:00');
+              const label = md.toLocaleString('en-IN',{month:'long',year:'numeric'});
+              const mOffset = (md.getFullYear()-now.getFullYear())*12 + (md.getMonth()-now.getMonth());
+              return '<option value="' + mOffset + '"' + (m===selKey?' selected':'') + '>' + label + '</option>';
+            }).join('')}
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="barHistoryMonthOffset++;renderBarHistoryModal(${barId})" ${isCurrentMonth?'style="opacity:0.3"':''}>›</button>
+        </div>
+
+        ${summarySection}
+        <div style="margin-top:14px;text-align:right">
+          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function showKegsByBar() {
   const barsWithKegs = bars.filter(b => !b.inactive && kegs.some(k => k.location === b.barName))
     .sort((a,b) => a.barName.localeCompare(b.barName));
@@ -6365,7 +6471,7 @@ function pageBars() {
           style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
       </td>
       <td style="font-weight:600;${b.inactive?'opacity:0.45':''}">
-        ${b.barName}
+        <span onclick="showBarOrderHistory(${b.id})" style="cursor:pointer;color:var(--text);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)">${b.barName}</span>
         ${b.inactive?`<span style="font-size:10px;color:var(--muted);margin-left:6px;font-weight:400">INACTIVE</span>`:''}
       </td>
       <td style="font-size:12px;color:var(--muted);${b.inactive?'opacity:0.45':''}">${cleanEntity(b.entity)}</td>
