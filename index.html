@@ -4946,14 +4946,20 @@ function renderBarHistoryModal(barId) {
 
   const allBarOrders = [...orders, ...HISTORICAL_ORDERS].filter(o => o.barId === barId);
 
-  // Get available months
+  // Get available months — always include current calendar month + currently viewed month
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth();
+  const currentMonthKey = nowYear + '-' + String(nowMonth+1).padStart(2,'0');
+  const selDate = new Date(nowYear, nowMonth + barHistoryMonthOffset, 1);
+  const selYear = selDate.getFullYear();
+  const selMonthNum = selDate.getMonth();
+  const selKey = selYear + '-' + String(selMonthNum+1).padStart(2,'0');
   const monthSet = new Set(allBarOrders.map(o => o.deliveryDate.slice(0,7)));
+  monthSet.add(currentMonthKey);
+  monthSet.add(selKey);
   const months = [...monthSet].sort((a,b)=>b.localeCompare(a));
 
-  // Current selected month
-  const now = new Date();
-  const selDate = new Date(now.getFullYear(), now.getMonth() + barHistoryMonthOffset, 1);
-  const selKey = selDate.toISOString().slice(0,7);
   const selLabel = selDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
   const isCurrentMonth = barHistoryMonthOffset === 0;
 
@@ -5025,7 +5031,8 @@ function renderBarHistoryModal(barId) {
               const md = new Date(m+'-01T00:00:00');
               const label = md.toLocaleString('en-IN',{month:'long',year:'numeric'});
               const mOffset = (md.getFullYear()-now.getFullYear())*12 + (md.getMonth()-now.getMonth());
-              return '<option value="' + mOffset + '"' + (m===selKey?' selected':'') + '>' + label + '</option>';
+              const isSelected = mOffset === barHistoryMonthOffset;
+              return '<option value="' + mOffset + '"' + (isSelected?' selected':'') + '>' + label + '</option>';
             }).join('')}
           </select>
           <button class="btn btn-ghost btn-sm" onclick="barHistoryMonthOffset++;renderBarHistoryModal(${barId})" ${isCurrentMonth?'style="opacity:0.3"':''}>›</button>
