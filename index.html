@@ -5583,16 +5583,24 @@ function pageBeers() {
                         ${(() => {
                           // Calculate dispatched litres from live orders
                           let dispatched = 0;
+                          const liveKegNos = new Set();
                           orders.forEach(o => {
                             (o.assignedKegs||[]).forEach(a => {
                               const fills = a.fills && a.fills.length > 0 ? a.fills
                                 : (a.batch == bb.batch && a.beer === b.code ? [{beer:a.beer,batch:a.batch,litres:a.kegSize||0}] : []);
-                              fills.forEach(f => { if(f.beer===b.code && f.batch==bb.batch) dispatched += Number(f.litres)||0; });
+                              fills.forEach(f => {
+                                if(f.beer===b.code && f.batch==bb.batch) {
+                                  dispatched += Number(f.litres)||0;
+                                  liveKegNos.add(a.kegNo);
+                                }
+                              });
                             });
                           });
-                          // Also count historical deliveries
+                          // Add historical deliveries, but skip kegs already counted in live orders
                           const histKey = b.code + bb.batch;
-                          (HISTORICAL_BATCH_DELIVERIES[histKey]||[]).forEach(h => dispatched += Number(h.litres)||0);
+                          (HISTORICAL_BATCH_DELIVERIES[histKey]||[]).forEach(h => {
+                            if (!liveKegNos.has(h.kegNo)) dispatched += Number(h.litres)||0;
+                          });
                           const brewed = Number(bb.litres)||0;
                           const remaining = Math.max(0, brewed - dispatched);
                           return `<span style="font-size:13px;font-weight:600;color:var(--orange)">${remaining}L</span>
