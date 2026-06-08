@@ -3336,9 +3336,8 @@ function pageDashboard() {
           .sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate))
           .map(o => {
             const kegs = countKegs(o);
-            const items = o.source === 'historical'
-              ? (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ')
-              : (o.assignedKegs||[]).map(a=>`${a.beer}${a.kegSize?` ${a.kegSize}L`:''}`).join(', ') || (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+            // Always use items for display (cleaner summary)
+            const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
             return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
               <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
               <span style="flex:1;color:var(--text)">${items}</span>
