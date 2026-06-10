@@ -4204,7 +4204,13 @@ function cancelOrderEdit() {
 
 function submitOrder(btn) {
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-  if (!newOrderState.barId) { alert('Please select a bar from the list.'); return; }
+  if (!newOrderState.barId) { alert('Please select a bar from the list.'); if(btn){btn.disabled=false;btn.style.opacity='1';} return; }
+  const dateYear = new Date(newOrderState.deliveryDate).getFullYear();
+  if (!newOrderState.deliveryDate || dateYear < 2019 || dateYear > 2099) {
+    alert('Please enter a valid delivery date.');
+    if(btn){btn.disabled=false;btn.style.opacity='1';}
+    return;
+  }
   const tp = Number(newOrderState.tpTotal)||0;
   const orderedTotal = newOrderState.items.reduce((s,i)=>s+Number(i.qty),0);
   // Prompt if TP and order qty don't match
