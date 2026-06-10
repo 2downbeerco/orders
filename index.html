@@ -2618,6 +2618,62 @@ let bars = [...BARS];
 let kegs = [];
 let activityLog = []; // [{id, timestamp, action, details}]
 
+let _autoSyncInterval = null;
+
+function startAutoSync() {
+  if (_autoSyncInterval) clearInterval(_autoSyncInterval);
+  _autoSyncInterval = setInterval(async () => {
+    try {
+      const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([
+        sbGet('orders'), sbGet('bars'), sbGet('kegs')
+      ]);
+
+      let changed = false;
+
+      // Check if orders changed
+      if (remoteOrders.length > 0) {
+        const newOrders = remoteOrders.filter(o => o && o.id && o.barId && o.deliveryDate && Array.isArray(o.items));
+        const oldJson = JSON.stringify(orders.map(o=>o.id).sort());
+        const newJson = JSON.stringify(newOrders.map(o=>o.id).sort());
+        if (oldJson !== newJson) {
+          orders = newOrders;
+          localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
+          changed = true;
+        }
+      }
+
+      // Check if bars changed
+      if (remoteBars.length > 0) {
+        if (JSON.stringify(remoteBars.length) !== JSON.stringify(bars.length)) {
+          bars = remoteBars;
+          localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
+          changed = true;
+        }
+      }
+
+      // Check special kegs rows for kegging/inv data changes
+      const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.growlerSales);
+      if (kegRows.length > 0) {
+        const oldKegJson = JSON.stringify(kegs.map(k=>k.kegNo+k.location+k.beer).sort());
+        const newKegJson = JSON.stringify(kegRows.map(k=>k.kegNo+k.location+k.beer).sort());
+        if (oldKegJson !== newKegJson) {
+          kegs = kegRows;
+          localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        setSyncStatus('Updated ↓', '#16A34A');
+        setTimeout(() => setSyncStatus('', ''), 2000);
+        try { renderPage(); } catch(e) {}
+      }
+    } catch(e) {
+      // Silent fail — don't show error for background sync
+    }
+  }, 30000); // every 30 seconds
+}
+
 function setSyncStatus(msg, color) {
   const el = document.getElementById('sync-status');
   if (!el) return;
@@ -2778,6 +2834,7 @@ async function loadData() {
     editingBatchIdx = null;
     editingKegNo = null;
     try { renderPage(); } catch(e) { console.error('renderPage error:', e); }
+    startAutoSync(); // begin polling for changes
   } catch(e) {
     console.error('Supabase error:', e);
     setSyncStatus('Offline', '#DC2626');
