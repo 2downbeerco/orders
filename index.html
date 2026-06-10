@@ -6413,14 +6413,24 @@ function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entit
       const dateBlocks = Object.entries(dateMap).sort(([a],[b])=>a.localeCompare(b)).map(([date, dOrders]) => {
         const dateRows = dOrders.map(o => {
           const inv = invData[o.id]||{};
+          const hist = HISTORICAL_INV_DATA[o.id];
           const totalLitres=(o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
-          const mrpGross=Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
-          const mrpDisc=Number(inv.mrpDiscount)||0;
-          const mrpFinal=mrpGross-mrpDisc;
-          let svcGross=0;
-          (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
-          const svcDisc=Number(inv.svcDiscount)||0;
-          const svcFinal=svcGross-svcDisc;
+          let mrpGross, mrpFinal, svcGross, svcFinal;
+          if (hist) {
+            mrpGross = hist.mrpAmount||0;
+            svcGross = hist.svcAmount||0;
+            mrpFinal = mrpGross - (Number(inv.mrpDiscount)||0);
+            svcFinal = svcGross - (Number(inv.svcDiscount)||0);
+          } else {
+            mrpGross = Math.ceil(MRP_PER_LITRE*1.02*totalLitres);
+            const mrpDisc = Number(inv.mrpDiscount)||0;
+            mrpFinal = mrpGross - mrpDisc;
+            svcGross = 0;
+            (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+            svcFinal = svcGross - (Number(inv.svcDiscount)||0);
+          }
+          const mrpDisc = Number(inv.mrpDiscount)||0;
+          const svcDisc = Number(inv.svcDiscount)||0;
           const itemStr=(o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
           return `<tr>
             <td style="font-size:12px;color:var(--muted)">${itemStr}</td>
