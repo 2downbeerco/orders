@@ -2688,6 +2688,7 @@ async function loadActivityLog() {
 
 
 async function loadData() {
+  // Load from localStorage immediately and render right away
   try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
   try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
   try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
@@ -2695,7 +2696,6 @@ async function loadData() {
   try { const kh = localStorage.getItem('2down_keg_history'); if (kh) kegHistory = JSON.parse(kh); } catch(_){}
   try { const bl = localStorage.getItem('2down_beers_v1'); if (bl) {
     const stored = JSON.parse(bl);
-    // Always start from BEERS_SEED, only copy custom/user-edited fields from stored
     stored.forEach(r => {
       const idx = BEERS.findIndex(b => b.code === r.code);
       if (idx >= 0) Object.assign(BEERS[idx], {name: r.name||BEERS[idx].name, color: r.color||BEERS[idx].color, inactive: r.inactive||BEERS[idx].inactive});
@@ -2704,8 +2704,13 @@ async function loadData() {
   try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
-  try { renderNav(); renderPage(); } catch(e) { console.error('renderPage error:', e); document.getElementById('content').innerHTML = `<div style="padding:40px;color:red"><b>Error rendering page</b><br>${e.message}<br><pre style="font-size:11px">${e.stack}</pre><button onclick="location.reload()">Reload</button></div>`; }
+  try { const fo = localStorage.getItem('2down_fieldops_reports'); if (fo) fieldOpsReports = JSON.parse(fo); } catch(_){}
 
+  // Render immediately from localStorage
+  renderNav();
+  try { renderPage(); } catch(e) { console.error('renderPage error:', e); }
+
+  // Sync from Supabase in background
   setSyncStatus('Syncing...', '#D4821A');
   try {
     const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([sbGet('orders'), sbGet('bars'), sbGet('kegs')]);
@@ -2770,12 +2775,14 @@ async function loadData() {
 
     setSyncStatus('Live', '#16A34A');
     setTimeout(() => setSyncStatus('', ''), 2000);
-    editingBatchIdx = null; // reset any in-progress edits after sync
+    editingBatchIdx = null;
     editingKegNo = null;
-    renderPage();
+    try { renderPage(); } catch(e) { console.error('renderPage error:', e); }
   } catch(e) {
     console.error('Supabase error:', e);
     setSyncStatus('Offline', '#DC2626');
+    // Still render with whatever we have from localStorage
+    try { renderPage(); } catch(re) { console.error('renderPage error:', re); }
   }
 }
 
@@ -2964,6 +2971,7 @@ function checkLockPw(tab) {
 function _renderPage() {
   const c = document.getElementById('content');
   if (!c) return;
+  const t0 = performance.now();
   try {
     if (currentTab==='dashboard') c.innerHTML = pageDashboard();
     else if (currentTab==='orders') c.innerHTML = pageOrders();
@@ -2980,6 +2988,8 @@ function _renderPage() {
     console.error('Render error on tab', currentTab, e);
     c.innerHTML = `<div style="padding:30px;color:var(--red)"><b>Error rendering ${currentTab}</b><br><small>${e.message}</small><br><br><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>`;
   }
+  const ms = Math.round(performance.now()-t0);
+  if (ms > 100) console.warn(`Slow render: ${currentTab} took ${ms}ms`);
   bindEvents();
 }
 
@@ -3304,22 +3314,25 @@ function pageDashboard() {
   const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
 
   // Merge live orders with historical orders for dashboard display
-  const allDashOrders = [...orders, ...HISTORICAL_ORDERS];
-  const monthOrders = allDashOrders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=mStart&&d<mEnd; });
-  const weekOrders  = allDashOrders.filter(o=>{ const d=new Date(o.deliveryDate); return d>=wStart&&d<wEnd; });
+  const allDashOrders = [...orders, ...HISTORICAL_ORDERS].filter(o => o && o.barId && o.deliveryDate);
+  const mStartTime = mStart.getTime(), mEndTime = mEnd.getTime();
+  const wStartTime = wStart.getTime(), wEndTime = wEnd.getTime();
+  const monthOrders = allDashOrders.filter(o=>{ const t=new Date(o.deliveryDate).getTime(); return t>=mStartTime&&t<mEndTime; });
+  const weekOrders  = allDashOrders.filter(o=>{ const t=new Date(o.deliveryDate).getTime(); return t>=wStartTime&&t<wEndTime; });
 
   // For stats: historical orders count their items; live orders only count if kegs are assigned
   const countKegs = (o) => {
-    if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+i.qty,0);
+    if (!o) return 0;
+    if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0),0);
     return (o.assignedKegs||[]).length;
   };
   const countLitres = (o) => {
-    if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+i.qty*(i.actualVol||i.size),0);
-    // For live orders: only count if kegs are assigned, use items as volume source
+    if (!o) return 0;
+    if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.actualVol||i.size)||0),0);
     if (!(o.assignedKegs||[]).length) return 0;
-    return (o.items||[]).reduce((s,i)=>s+i.qty*i.size,0);
+    return (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.size)||0),0);
   };
-  const hasKegs = (o) => o.source === 'historical' || (o.assignedKegs||[]).length > 0;
+  const hasKegs = (o) => o && (o.source === 'historical' || (o.assignedKegs||[]).length > 0);
 
   const monthKegs = monthOrders.reduce((s,o)=>s+countKegs(o),0);
   const monthTP   = monthOrders.reduce((s,o)=>s+(o.tpTotal||0),0);
@@ -3380,25 +3393,27 @@ function pageDashboard() {
       .sort((a,b) => b.totalKegs - a.totalKegs)
       .map(({bar, orders: bOrders, totalKegs}) => {
         const isOpen = dashExpandedBar === bar.id;
-        const deliveryRows = bOrders
-          .sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate))
-          .map(o => {
-            const kegs = countKegs(o);
-            // Always use items for display (cleaner summary)
-            const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
-            return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
-              <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
-              <span style="flex:1;color:var(--text)">${items}</span>
-              <span style="font-weight:600;color:var(--orange)">${kegs} keg${kegs!==1?'s':''}</span>
-            </div>`;
-          }).join('');
+        const expandedContent = isOpen ? (() => {
+          const deliveryRows = bOrders
+            .sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate))
+            .map(o => {
+              const kegs = countKegs(o);
+              const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+              return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
+                <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
+                <span style="flex:1;color:var(--text)">${items}</span>
+                <span style="font-weight:600;color:var(--orange)">${kegs} keg${kegs!==1?'s':''}</span>
+              </div>`;
+            }).join('');
+          return `<div style="padding-bottom:10px">${deliveryRows}</div>`;
+        })() : '';
         return `<div style="border-bottom:1px solid var(--hover)">
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;cursor:pointer"
             onclick="dashExpandedBar=dashExpandedBar===${bar.id}?null:${bar.id};renderPage()">
             <div style="font-weight:600;font-size:14px">${bar.barName}</div>
             <span style="font-size:13px;font-weight:700;color:var(--orange)">${totalKegs} keg${totalKegs!==1?'s':''}</span>
           </div>
-          ${isOpen ? `<div style="padding-bottom:10px">${deliveryRows}</div>` : ''}
+          ${expandedContent}
         </div>`;
       }).join('');
   };
@@ -3511,21 +3526,23 @@ function pageOrders() {
   const isCurrentWeek = ordersWeekOffset === 0;
   const weekLabel = `${wStart.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} – ${wEndDisplay.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`;
 
-  // Build week options from earliest order to current week
+  // Build week options — cap at 2 years back to prevent corrupted dates from hanging
   const allWeekStarts = [];
   if (orders.length > 0) {
-    const dates = orders.map(o=>new Date(o.deliveryDate)).filter(d=>!isNaN(d));
-    const earliest = new Date(Math.min(...dates));
-    const earliestMon = new Date(earliest);
-    earliestMon.setDate(earliest.getDate() - ((earliest.getDay()+6)%7));
-    earliestMon.setHours(0,0,0,0);
-    const curMon = new Date(now);
-    curMon.setDate(now.getDate() - ((now.getDay()+6)%7));
-    curMon.setHours(0,0,0,0);
-    let d = new Date(curMon);
-    while (d >= earliestMon) {
-      allWeekStarts.push(new Date(d));
-      d.setDate(d.getDate()-7);
+    const validDates = orders.map(o=>new Date(o.deliveryDate)).filter(d=>!isNaN(d)&&d.getFullYear()>2019);
+    if (validDates.length > 0) {
+      const earliest = new Date(Math.min(...validDates));
+      const earliestMon = new Date(earliest);
+      earliestMon.setDate(earliest.getDate() - ((earliest.getDay()+6)%7));
+      earliestMon.setHours(0,0,0,0);
+      const curMon = new Date(now);
+      curMon.setDate(now.getDate() - ((now.getDay()+6)%7));
+      curMon.setHours(0,0,0,0);
+      let d = new Date(curMon);
+      while (d >= earliestMon) {
+        allWeekStarts.push(new Date(d));
+        d.setDate(d.getDate()-7);
+      }
     }
   }
 
