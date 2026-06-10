@@ -3234,7 +3234,7 @@ function pageFieldOps() {
 
     const checklist = `<div style="flex:1;min-width:0">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <button class="btn btn-ghost btn-sm" onclick="fieldOpsStep='select';renderPage()">← Back</button>
+        <button class="btn btn-ghost btn-sm" onclick="fieldOpsStep='select';editingFieldOpsId=null;renderPage()">← Back</button>
         <div>
           <div style="font-size:18px;font-weight:700">${bar.barName}</div>
           <div style="font-size:12px;color:var(--muted)">${bar.area} · Field Ops Checklist</div>
@@ -3282,7 +3282,7 @@ function pageFieldOps() {
         <textarea id="fo-obs" class="inp" style="width:100%;height:80px;resize:vertical" placeholder="Any other observations from the visit…"></textarea>
       </div>
       <button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px" onclick="submitFieldOps('${bar.barName}',${barKegs.length})">
-        Submit Visit Report
+        ${editingFieldOpsId ? 'Update Visit Report' : 'Submit Visit Report'}
       </button>
     </div>`;
 
@@ -3356,18 +3356,52 @@ function showFieldOpsReport(id) {
         <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
         <div style="margin-top:14px;display:flex;justify-content:space-between">
           <button onclick="if(confirm('Delete this report?')){fieldOpsReports=fieldOpsReports.filter(x=>x.id!=='${r.id}');saveFieldOpsReports();closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
-          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+          <div style="display:flex;gap:8px">
+            <button onclick="editFieldOpsReport('${r.id}')" class="btn btn-ghost btn-sm">✎ Edit</button>
+            <button onclick="closeModal()" class="btn btn-primary">Close</button>
+          </div>
         </div>
       </div>
     </div>`;
+}
+
+let editingFieldOpsId = null;
+
+function editFieldOpsReport(id) {
+  const r = fieldOpsReports.find(x=>x.id===id);
+  if (!r) return;
+  const bar = bars.find(b=>b.barName===r.barName);
+  if (!bar) { alert('Bar not found'); return; }
+  editingFieldOpsId = id;
+  fieldOpsBarId = bar.id;
+  fieldOpsStep = 'checklist';
+  closeModal();
+  renderPage();
+  // Pre-fill fields after render
+  setTimeout(() => {
+    if (document.getElementById('fo-tap')) document.getElementById('fo-tap').value = r.tap||'';
+    if (document.getElementById('fo-co2')) document.getElementById('fo-co2').value = r.co2||'';
+    if (document.getElementById('fo-temp')) document.getElementById('fo-temp').value = r.temp||'';
+    if (document.getElementById('fo-comp')) document.getElementById('fo-comp').value = r.comp||'';
+    if (document.getElementById('fo-menu')) document.getElementById('fo-menu').value = r.menu||'';
+    if (document.getElementById('fo-merch')) document.getElementById('fo-merch').value = r.merch||'';
+    if (document.getElementById('fo-obs')) document.getElementById('fo-obs').value = r.obs||'';
+    if (r.training === 'Yes') {
+      const yesRadio = document.querySelector('input[name=fo-training][value=Yes]');
+      if (yesRadio) { yesRadio.checked = true; document.getElementById('fo-training-date-row').style.display='block'; }
+    }
+    if (r.trainingDate && document.getElementById('fo-training-date')) {
+      document.getElementById('fo-training-date').value = r.trainingDate;
+    }
+  }, 50);
 }
 
 function submitFieldOps(barName, totalKegs) {
   const checked = [...document.querySelectorAll('.fo-keg-cb:checked')].map(cb=>cb.dataset.keg);
   const unchecked = [...document.querySelectorAll('.fo-keg-cb:not(:checked)')].map(cb=>cb.dataset.keg);
   const report = {
-    id: uid(),
-    timestamp: new Date().toISOString(),
+    id: editingFieldOpsId || uid(),
+    timestamp: editingFieldOpsId ? (fieldOpsReports.find(x=>x.id===editingFieldOpsId)?.timestamp || new Date().toISOString()) : new Date().toISOString(),
     barName,
     kegs: `${checked.length}/${totalKegs} verified${unchecked.length?' · Not found: '+unchecked.join(', '):''}`,
     tap: document.getElementById('fo-tap')?.value?.trim()||'',
@@ -3380,7 +3414,14 @@ function submitFieldOps(barName, totalKegs) {
     merch: document.getElementById('fo-merch')?.value?.trim()||'',
     obs: document.getElementById('fo-obs')?.value?.trim()||'',
   };
-  fieldOpsReports.unshift(report);
+  if (editingFieldOpsId) {
+    const idx = fieldOpsReports.findIndex(x=>x.id===editingFieldOpsId);
+    if (idx >= 0) fieldOpsReports[idx] = report;
+    else fieldOpsReports.unshift(report);
+  } else {
+    fieldOpsReports.unshift(report);
+  }
+  editingFieldOpsId = null;
   saveFieldOpsReports();
   fieldOpsStep = 'select';
   fieldOpsBarId = null;
