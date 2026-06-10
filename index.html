@@ -2695,8 +2695,11 @@ async function loadData() {
   try { const kh = localStorage.getItem('2down_keg_history'); if (kh) kegHistory = JSON.parse(kh); } catch(_){}
   try { const bl = localStorage.getItem('2down_beers_v1'); if (bl) {
     const stored = JSON.parse(bl);
-    BEERS = BEERS_SEED.map(seed => { const r = stored.find(x=>x.code===seed.code); return r?{...seed,...r}:seed; });
-    stored.forEach(r=>{ if(!BEERS.find(b=>b.code===r.code)) BEERS.push(r); });
+    // Always start from BEERS_SEED, only copy custom/user-edited fields from stored
+    stored.forEach(r => {
+      const idx = BEERS.findIndex(b => b.code === r.code);
+      if (idx >= 0) Object.assign(BEERS[idx], {name: r.name||BEERS[idx].name, color: r.color||BEERS[idx].color, inactive: r.inactive||BEERS[idx].inactive});
+    });
   }} catch(_){}
   try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
@@ -2741,14 +2744,11 @@ async function loadData() {
     if (bbRow)  { breweryBeers    = bbRow.breweryBeers;    localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers)); }
     if (khRow)  { kegHistory      = khRow.kegHistory;      localStorage.setItem('2down_keg_history',   JSON.stringify(kegHistory)); }
     if (blRow)  {
-      // Merge: keep BEERS_SEED entries (including retired beers), update with Supabase active beers
       const remote = blRow.beers || [];
-      BEERS = BEERS_SEED.map(seed => {
-        const r = remote.find(x => x.code === seed.code);
-        return r ? {...seed, ...r} : seed;
+      remote.forEach(r => {
+        const idx = BEERS.findIndex(b => b.code === r.code);
+        if (idx >= 0) Object.assign(BEERS[idx], {name: r.name||BEERS[idx].name, color: r.color||BEERS[idx].color, inactive: r.inactive||BEERS[idx].inactive});
       });
-      // Add any new beers from Supabase not in seed
-      remote.forEach(r => { if (!BEERS.find(b => b.code === r.code)) BEERS.push(r); });
       localStorage.setItem('2down_beers_v1', JSON.stringify(BEERS));
     }
     if (rcRow)  { rateCard        = rcRow.rateCard;         localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
@@ -3327,10 +3327,13 @@ function pageDashboard() {
   // Kegging summary
   const makeSummary = (orderList) => {
     const s = {};
-    // Helper to extract base beer code (strip trailing digits/batch number)
-    const baseCode = (code) => {
-      const b = BEERS.find(x => code === x.code || code.startsWith(x.code));
-      return b ? b.code : code;
+    // Pre-build lookup: raw beer code → base code
+    const codeMap = {};
+    const baseCode = (raw) => {
+      if (codeMap[raw] !== undefined) return codeMap[raw];
+      const b = BEERS.find(x => raw === x.code || raw.startsWith(x.code));
+      codeMap[raw] = b ? b.code : raw;
+      return codeMap[raw];
     };
     orderList.forEach(o => {
       if (o.source === 'historical') {
