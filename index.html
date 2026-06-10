@@ -2759,10 +2759,13 @@ async function loadData() {
     if (kegRows.length > 0) {
       kegs = kegRows;
       localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
-    } else {
+    } else if (!localStorage.getItem('2down_kegs_v4')) {
+      // Only seed if we've never had kegs before (avoid mass upsert on filter glitch)
       kegs = [...KEG_SEED];
       localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
-      await Promise.all(kegs.map(k => sbUpsert('kegs', k.kegNo, k)));
+      for (let i = 0; i < kegs.length; i += 20) {
+        await Promise.all(kegs.slice(i, i+20).map(k => sbUpsert('kegs', k.kegNo, k)));
+      }
     }
 
     setSyncStatus('Live', '#16A34A');
@@ -3360,13 +3363,16 @@ function pageDashboard() {
   const summary = makeSummary(dashView==='week' ? weekOrders : monthOrders);
 
   // Orders list
+  const barById = {};
+  bars.forEach(b => { barById[b.id] = b; });
+
   const makeOrderList = (orderList, emptyMsg) => {
     if (!orderList.length) return `<div class="empty">${emptyMsg}</div>`;
     const barMap = {};
     orderList.forEach(o => {
-      if (!hasKegs(o)) return; // skip unassigned live orders
+      if (!hasKegs(o)) return;
       const bid = o.barId;
-      if (!barMap[bid]) barMap[bid] = { bar: bars.find(x=>x.id===bid)||{barName:'Unknown'}, orders:[] };
+      if (!barMap[bid]) barMap[bid] = { bar: barById[bid]||{barName:'Unknown',id:bid}, orders:[] };
       barMap[bid].orders.push(o);
     });
     return Object.values(barMap)
