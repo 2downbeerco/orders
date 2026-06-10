@@ -2704,7 +2704,7 @@ async function loadData() {
   try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
-  renderNav(); renderPage();
+  try { renderNav(); renderPage(); } catch(e) { console.error('renderPage error:', e); document.getElementById('content').innerHTML = `<div style="padding:40px;color:red"><b>Error rendering page</b><br>${e.message}<br><pre style="font-size:11px">${e.stack}</pre><button onclick="location.reload()">Reload</button></div>`; }
 
   setSyncStatus('Syncing...', '#D4821A');
   try {
