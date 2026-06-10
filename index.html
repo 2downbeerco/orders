@@ -3057,9 +3057,119 @@ let dashWeekOffset = 0; // 0 = current week
 let dashExpandedBar = null;
 
 let fieldOpsBarId = null;
-let fieldOpsStep = 'select'; // 'select' | 'checklist'
+let fieldOpsStep = 'select';
 let fieldOpsSearch = '';
-let fieldOpsReports = []; // separate from activityLog
+let fieldOpsReports = [];
+let fieldOpsFilterBar = '';
+let fieldOpsFilterDate = '';
+
+function showFieldOpsFilterBar() {
+  const uniqueBars = [...new Set(fieldOpsReports.map(r=>r.barName))].sort();
+  if (!uniqueBars.length) { alert('No reports yet.'); return; }
+  const options = uniqueBars.map(name => {
+    const count = fieldOpsReports.filter(r=>r.barName===name).length;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <input type="radio" name="fof-bar" value="${name}" ${fieldOpsFilterBar===name?'checked':''} style="accent-color:var(--accent)">
+      <span style="font-weight:600;flex:1">${name}</span>
+      <span style="font-size:12px;color:var(--muted)">${count} report${count!==1?'s':''}</span>
+    </label>`;
+  }).join('');
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:400px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Filter by Bar</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="max-height:420px;overflow-y:auto;margin-bottom:14px">${options}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="fieldOpsFilterBar='';fieldOpsFilterDate='';closeModal();renderPage()">Clear</button>
+          <button class="btn btn-primary" onclick="
+            const sel=document.querySelector('input[name=fof-bar]:checked');
+            if(!sel){alert('Please select a bar.');return;}
+            fieldOpsFilterBar=sel.value;fieldOpsFilterDate='';closeModal();renderPage();">Apply</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showFieldOpsFilterDate() {
+  if (!fieldOpsReports.length) { alert('No reports yet.'); return; }
+
+  // Get all dates that have reports (as YYYY-MM-DD local)
+  const reportDates = new Set(fieldOpsReports.map(r => {
+    const d = new Date(r.timestamp);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }));
+
+  // Calendar state stored on window to survive re-renders
+  if (!window._foCal) {
+    const now = new Date();
+    window._foCal = { year: now.getFullYear(), month: now.getMonth() };
+  }
+
+  const renderCal = () => {
+    const { year, month } = window._foCal;
+    const monthLabel = new Date(year, month, 1).toLocaleString('en-IN', {month:'long', year:'numeric'});
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const startOffset = (firstDay + 6) % 7; // Mon=0
+
+    let cells = '';
+    for (let i = 0; i < startOffset; i++) cells += '<div></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const hasReport = reportDates.has(key);
+      const isSelected = fieldOpsFilterDate === key;
+      cells += `<div onclick="${hasReport ? `fieldOpsFilterDate='${key}';fieldOpsFilterBar='';closeModal();renderPage()` : ''}"
+        style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:13px;
+          ${hasReport ? `cursor:pointer;background:${isSelected?'var(--accent)':'var(--accent)22'};color:${isSelected?'#fff':'var(--accent)'};font-weight:700;` : 'color:var(--muted);'}
+          ${hasReport ? 'position:relative;' : ''}">
+        ${d}
+        ${hasReport && !isSelected ? '<span style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent)"></span>' : ''}
+      </div>`;
+    }
+
+    const cells2 = cells; // already built above
+    document.getElementById('fo-cal-body').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <button class="btn btn-ghost btn-sm" id="fo-cal-prev">‹</button>
+        <div style="font-weight:700;font-size:14px">${monthLabel}</div>
+        <button class="btn btn-ghost btn-sm" id="fo-cal-next">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,36px);gap:4px;justify-content:center;margin-bottom:8px">
+        ${['M','T','W','T','F','S','S'].map(d=>`<div style="width:36px;text-align:center;font-size:11px;font-weight:700;color:var(--muted)">${d}</div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,36px);gap:4px;justify-content:center">${cells2}</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center">Highlighted dates have visit reports</div>`;
+
+    document.getElementById('fo-cal-prev')?.addEventListener('click', () => {
+      window._foCal.month--; if(window._foCal.month<0){window._foCal.month=11;window._foCal.year--;} renderCal();
+    });
+    document.getElementById('fo-cal-next')?.addEventListener('click', () => {
+      window._foCal.month++; if(window._foCal.month>11){window._foCal.month=0;window._foCal.year++;} renderCal();
+    });
+  };
+
+  window._foCalRender = renderCal;
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:340px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Filter by Date</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div id="fo-cal-body"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="fieldOpsFilterDate='';fieldOpsFilterBar='';closeModal();renderPage()">Clear</button>
+        </div>
+      </div>
+    </div>`;
+
+  renderCal();
+}
 
 async function saveFieldOpsReports() {
   localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
@@ -3072,12 +3182,28 @@ function pageFieldOps() {
     try { const r = localStorage.getItem('2down_fieldops_reports'); if (r) fieldOpsReports = JSON.parse(r); } catch(_){}
   }
 
+  // Apply active filters to reports
+  let filteredReports = fieldOpsReports.slice().reverse();
+  if (fieldOpsFilterBar) filteredReports = filteredReports.filter(r => r.barName === fieldOpsFilterBar);
+  if (fieldOpsFilterDate) filteredReports = filteredReports.filter(r => r.timestamp && new Date(r.timestamp).toLocaleDateString('en-CA') === fieldOpsFilterDate);
+
+  const filterActive = fieldOpsFilterBar || fieldOpsFilterDate;
+  const filterLabel = fieldOpsFilterBar ? fieldOpsFilterBar : fieldOpsFilterDate ? new Date(fieldOpsFilterDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+
   const reportsPanel = `
     <div class="card">
-      <div class="section-title" style="margin-bottom:12px">Visit Reports</div>
-      ${fieldOpsReports.length === 0
-        ? `<div class="empty" style="font-size:12px">No reports submitted yet</div>`
-        : fieldOpsReports.slice().reverse().map(r => {
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-title" style="margin-bottom:0">Visit Reports</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="showFieldOpsFilterBar()" title="Filter by Bar">🏪</button>
+          <button class="btn btn-ghost btn-sm" onclick="showFieldOpsFilterDate()" title="Filter by Date">📅</button>
+          ${filterActive ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="fieldOpsFilterBar='';fieldOpsFilterDate='';renderPage()" title="Clear filter">✕</button>` : ''}
+        </div>
+      </div>
+      ${filterActive ? `<div style="font-size:11px;color:var(--orange);margin-bottom:8px">Showing: ${filterLabel}</div>` : ''}
+      ${filteredReports.length === 0
+        ? `<div class="empty" style="font-size:12px">${filterActive ? 'No reports match this filter' : 'No reports submitted yet'}</div>`
+        : filteredReports.map(r => {
             const ts = new Date(r.timestamp);
             const dateStr = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
             const timeStr = ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
@@ -3228,7 +3354,8 @@ function showFieldOpsReport(id) {
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
         </div>
         <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
-        <div style="margin-top:14px;text-align:right">
+        <div style="margin-top:14px;display:flex;justify-content:space-between">
+          <button onclick="if(confirm('Delete this report?')){fieldOpsReports=fieldOpsReports.filter(x=>x.id!=='${r.id}');saveFieldOpsReports();closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
           <button onclick="closeModal()" class="btn btn-primary">Close</button>
         </div>
       </div>
