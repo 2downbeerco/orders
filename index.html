@@ -5251,10 +5251,7 @@ function showKegsByDateResult(date) {
         <div id="route-list" style="max-height:460px;overflow-y:auto;margin:14px 0"></div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <button onclick="showKegsByDate()" class="btn btn-ghost btn-sm">← Back</button>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="openKegTable('${date}', 'date')">⎙ View Table (No Route)</button>
-            <button class="btn btn-primary btn-sm" onclick="openKegTableWithRoute('${date}')">⎙ View Table with Route</button>
-          </div>
+          <button class="btn btn-primary btn-sm" onclick="openKegTableWithRoute('${date}')">⎙ View Table</button>
         </div>
       </div>
     </div>`;
