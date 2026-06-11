@@ -6103,8 +6103,8 @@ function showBatchHistory(beerCode, batchNo) {
   // Add historical deliveries from sheet
   const histKey = beerCode + batchNo;
   (HISTORICAL_BATCH_DELIVERIES[histKey] || []).forEach(h => {
-    // Don't duplicate if live order already has this keg
-    if (!deliveries.find(d => d.kegNo === h.kegNo)) {
+    // Don't duplicate if live order already has this exact keg on the same date
+    if (!deliveries.find(d => d.kegNo === h.kegNo && d.date === h.date)) {
       deliveries.push({ date: h.date, bar: h.barName, kegNo: h.kegNo, litres: h.litres });
     }
   });
