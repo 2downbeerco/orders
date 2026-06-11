@@ -5879,7 +5879,7 @@ function pageBeers() {
                         ${(() => {
                           // Calculate dispatched litres from live orders
                           let dispatched = 0;
-                          const liveKegBatches = new Set(); // kegNo|batchKey
+                          const liveKegDates = new Set(); // kegNo|date for live GR13 deliveries
                           // Count live orders for this specific batch
                           orders.forEach(o => {
                             (o.assignedKegs||[]).forEach(a => {
@@ -5888,17 +5888,17 @@ function pageBeers() {
                               const fillMatch = fills.filter(f => f.beer===b.code && String(f.batch)===String(bb.batch));
                               if (fillMatch.length > 0) {
                                 fillMatch.forEach(f => { dispatched += Number(f.litres)||0; });
-                                liveKegBatches.add(a.kegNo + '|' + b.code + bb.batch);
+                                liveKegDates.add(a.kegNo + '|' + o.deliveryDate);
                               } else if (batchMatch) {
                                 dispatched += Number(a.kegSize)||0;
-                                liveKegBatches.add(a.kegNo + '|' + b.code + bb.batch);
+                                liveKegDates.add(a.kegNo + '|' + o.deliveryDate);
                               }
                             });
                           });
-                          // Add historical deliveries, skipping only if same keg+batch in live orders
+                          // Add historical deliveries, skipping only exact same keg+date as a live order
                           const histKey = b.code + bb.batch;
                           (HISTORICAL_BATCH_DELIVERIES[histKey]||[]).forEach(h => {
-                            if (!liveKegBatches.has(h.kegNo + '|' + histKey)) dispatched += Number(h.litres)||0;
+                            if (!liveKegDates.has(h.kegNo + '|' + h.date)) dispatched += Number(h.litres)||0;
                           });
                           const brewed = Number(bb.litres)||0;
                           const remaining = Math.max(0, brewed - dispatched);
