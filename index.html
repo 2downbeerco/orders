@@ -5880,22 +5880,24 @@ function pageBeers() {
                           // Calculate dispatched litres from live orders
                           let dispatched = 0;
                           const liveKegNos = new Set();
+                          // Build set of ALL keg numbers in any live order
+                          orders.forEach(o => {
+                            (o.assignedKegs||[]).forEach(a => { if(a.kegNo) liveKegNos.add(a.kegNo); });
+                          });
+                          // Count live orders for this specific batch
                           orders.forEach(o => {
                             (o.assignedKegs||[]).forEach(a => {
-                              // Always track this keg if it belongs to this batch
                               const batchMatch = String(a.batch) === String(bb.batch) && a.beer === b.code;
                               const fills = a.fills && a.fills.length > 0 ? a.fills : [];
                               const fillMatch = fills.filter(f => f.beer===b.code && String(f.batch)===String(bb.batch));
                               if (fillMatch.length > 0) {
                                 fillMatch.forEach(f => { dispatched += Number(f.litres)||0; });
-                                liveKegNos.add(a.kegNo);
                               } else if (batchMatch) {
                                 dispatched += Number(a.kegSize)||0;
-                                liveKegNos.add(a.kegNo);
                               }
                             });
                           });
-                          // Add historical deliveries, but skip kegs already counted in live orders
+                          // Add historical deliveries, skipping kegs that exist in ANY live order
                           const histKey = b.code + bb.batch;
                           (HISTORICAL_BATCH_DELIVERIES[histKey]||[]).forEach(h => {
                             if (!liveKegNos.has(h.kegNo)) dispatched += Number(h.litres)||0;
