@@ -2816,6 +2816,8 @@ async function loadData() {
     if (invRow) { invData         = invRow.invData;         localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
     if (alRow)  { activityLog     = alRow.activityLog;      localStorage.setItem('2down_activity_log',  JSON.stringify(activityLog)); }
     if (foRow)  { fieldOpsReports = foRow.fieldOpsReports;  localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports)); }
+    const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
+    if (foNewRow) { fieldOpsNewBarReports = foNewRow.fieldOpsNewBarReports; localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports)); }
 
     if (kegRows.length > 0) {
       kegs = kegRows;
@@ -3177,6 +3179,10 @@ function showFieldOpsFilterDate() {
 async function saveFieldOpsReports() {
   localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
   try { await sbUpsert('kegs', '__fieldops_reports__', { fieldOpsReports }); } catch(_) {}
+}
+async function saveFieldOpsNewBarReports() {
+  localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports));
+  try { await sbUpsert('kegs', '__fieldops_newbar__', { fieldOpsNewBarReports }); } catch(_) {}
 }
 
 function pageFieldOps() {
@@ -3578,7 +3584,7 @@ function submitNewBarVisit() {
     comments: document.getElementById('nb-comments')?.value?.trim()||'',
   };
   fieldOpsNewBarReports.push(report);
-  try { localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports)); } catch(_){}
+  saveFieldOpsNewBarReports();
   fieldOpsMode = 'landing';
   renderPage();
   setTimeout(()=>alert(`New bar visit submitted for ${barName}!`),100);
@@ -3616,7 +3622,7 @@ function showNewBarReport(id) {
         </div>
         <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
         <div style="margin-top:14px;display:flex;justify-content:space-between">
-          <button onclick="if(confirm('Delete this report?')){fieldOpsNewBarReports=fieldOpsNewBarReports.filter(x=>x.id!=='${r.id}');try{localStorage.setItem('2down_fieldops_newbar',JSON.stringify(fieldOpsNewBarReports));}catch(_){}closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
+          <button onclick="if(confirm('Delete this report?')){fieldOpsNewBarReports=fieldOpsNewBarReports.filter(x=>x.id!=='${r.id}');saveFieldOpsNewBarReports();closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
           <button onclick="closeModal()" class="btn btn-primary">Close</button>
         </div>
       </div>
