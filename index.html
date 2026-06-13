@@ -2785,6 +2785,7 @@ async function loadData() {
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
   try { const fo = localStorage.getItem('2down_fieldops_reports'); if (fo) fieldOpsReports = JSON.parse(fo); } catch(_){}
+  try { const fn = localStorage.getItem('2down_fieldops_newbar'); if (fn) fieldOpsNewBarReports = JSON.parse(fn); } catch(_){}
 
   // Render immediately from localStorage
   renderNav();
@@ -3088,6 +3089,7 @@ let fieldOpsMode = 'landing';
 let fieldOpsSearch = '';
 let fieldOpsReports = [];
 let fieldOpsNewBarReports = [];
+let editingNewBarId = null;
 let fieldOpsFilterBar = '';
 let fieldOpsFilterDate = '';
 
@@ -3211,12 +3213,7 @@ async function saveFieldOpsNewBarReports() {
 
 function pageFieldOps() {
   // Load reports from localStorage if empty
-  if (fieldOpsReports.length === 0) {
-    try { const r = localStorage.getItem('2down_fieldops_reports'); if (r) fieldOpsReports = JSON.parse(r); } catch(_){}
-  }
-  if (fieldOpsNewBarReports.length === 0) {
-    try { const r = localStorage.getItem('2down_fieldops_newbar'); if (r) fieldOpsNewBarReports = JSON.parse(r); } catch(_){}
-  }
+  // Reports are kept current by the polling loop and initial load — no localStorage fallback here
 
   // Landing screen
   if (fieldOpsMode === 'landing') {
@@ -3247,8 +3244,8 @@ function pageFieldOps() {
     return `<div style="display:flex;flex-direction:column;gap:16px;max-width:640px;width:100%">
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-          <button class="btn btn-ghost btn-sm" onclick="fieldOpsMode='landing';renderPage()">← Back</button>
-          <div class="section-title" style="margin-bottom:0">New Bar Visit</div>
+          <button class="btn btn-ghost btn-sm" onclick="editingNewBarId=null;fieldOpsMode='landing';renderPage()">← Back</button>
+          <div class="section-title" style="margin-bottom:0">${editingNewBarId ? 'Edit Bar Visit' : 'New Bar Visit'}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:14px">
           <div>
@@ -3312,7 +3309,7 @@ function pageFieldOps() {
           </div>
         </div>
         <button class="btn btn-primary" style="width:100%;margin-top:20px;padding:14px;font-size:14px" onclick="submitNewBarVisit()">
-          Submit New Bar Visit →
+          ${editingNewBarId ? 'Update Bar Visit →' : 'Submit New Bar Visit →'}
         </button>
       </div>
     </div>`;
@@ -3590,12 +3587,38 @@ function showNewBarFilterDate() {
   renderCal();
 }
 
+function editNewBarReport(id) {
+  editingNewBarId = id;
+  fieldOpsMode = 'new';
+  closeModal();
+  renderPage();
+  const r = fieldOpsNewBarReports.find(x=>x.id===id);
+  if (!r) return;
+  setTimeout(() => {
+    if (document.getElementById('nb-date')) document.getElementById('nb-date').value = r.visitDate||'';
+    if (document.getElementById('nb-name')) document.getElementById('nb-name').value = r.barName||'';
+    if (document.getElementById('nb-location')) document.getElementById('nb-location').value = r.location||'';
+    if (document.getElementById('nb-beers')) document.getElementById('nb-beers').value = r.beersOnTap||'';
+    if (document.getElementById('nb-poc-name')) document.getElementById('nb-poc-name').value = r.pocName||'';
+    if (document.getElementById('nb-poc-desig')) document.getElementById('nb-poc-desig').value = r.pocDesignation||'';
+    if (document.getElementById('nb-poc-mobile')) document.getElementById('nb-poc-mobile').value = r.pocMobile||'';
+    if (document.getElementById('nb-comments')) document.getElementById('nb-comments').value = r.comments||'';
+    const craftVal = r.craftBeerOnTap === 'Yes' ? 'Yes' : 'No';
+    const craftRadio = document.querySelector(`input[name=nb-craft][value=${craftVal}]`);
+    if (craftRadio) { craftRadio.checked = true; document.getElementById('nb-which-beer-row').style.display = craftVal==='Yes'?'block':'none'; }
+    const kegVal = r.kegeratorAvailable === 'Yes' ? 'Yes' : 'No';
+    const kegRadio = document.querySelector(`input[name=nb-kegerator][value=${kegVal}]`);
+    if (kegRadio) kegRadio.checked = true;
+  }, 50);
+}
+
 function submitNewBarVisit() {
   const barName = document.getElementById('nb-name')?.value?.trim();
   if (!barName) { alert('Please enter the bar name.'); return; }
+  const existing = editingNewBarId ? fieldOpsNewBarReports.find(x=>x.id===editingNewBarId) : null;
   const report = {
-    id: uid(),
-    timestamp: new Date().toISOString(),
+    id: editingNewBarId || uid(),
+    timestamp: existing ? existing.timestamp : new Date().toISOString(),
     visitDate: document.getElementById('nb-date')?.value || new Date().toISOString().slice(0,10),
     barName,
     location: document.getElementById('nb-location')?.value?.trim()||'',
@@ -3607,11 +3630,17 @@ function submitNewBarVisit() {
     pocMobile: document.getElementById('nb-poc-mobile')?.value?.trim()||'',
     comments: document.getElementById('nb-comments')?.value?.trim()||'',
   };
-  fieldOpsNewBarReports.push(report);
+  if (editingNewBarId) {
+    const idx = fieldOpsNewBarReports.findIndex(x=>x.id===editingNewBarId);
+    if (idx >= 0) fieldOpsNewBarReports[idx] = report; else fieldOpsNewBarReports.push(report);
+  } else {
+    fieldOpsNewBarReports.push(report);
+  }
+  editingNewBarId = null;
   saveFieldOpsNewBarReports();
-  fieldOpsMode = 'landing';
+  fieldOpsMode = 'new-reports';
   renderPage();
-  setTimeout(()=>alert(`New bar visit submitted for ${barName}!`),100);
+  setTimeout(()=>alert(`New bar visit ${existing?'updated':'submitted'} for ${barName}!`),100);
 }
 
 function showNewBarReport(id) {
@@ -3647,7 +3676,10 @@ function showNewBarReport(id) {
         <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
         <div style="margin-top:14px;display:flex;justify-content:space-between">
           <button onclick="if(confirm('Delete this report?')){fieldOpsNewBarReports=fieldOpsNewBarReports.filter(x=>x.id!=='${r.id}');saveFieldOpsNewBarReports();closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
-          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+          <div style="display:flex;gap:8px">
+            <button onclick="editNewBarReport('${r.id}')" class="btn btn-ghost btn-sm">✎ Edit</button>
+            <button onclick="closeModal()" class="btn btn-primary">Close</button>
+          </div>
         </div>
       </div>
     </div>`;
