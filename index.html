@@ -3301,9 +3301,10 @@ function pageFieldOps() {
   }
 
   // Step 1: Bar selection with search
+  // Always render ALL bars — search filters in place without re-rendering
   const activeBars = bars.filter(b=>b&&b.id&&!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
-  const opts = activeBars.filter(b=>!fieldOpsSearch||b.barName.toLowerCase().includes(fieldOpsSearch.toLowerCase())).map(b=>`
-    <label style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
+  const opts = activeBars.map(b=>`
+    <label data-search="${b.barName.toLowerCase()} ${(b.area||'').toLowerCase()}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
       onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
       <input type="radio" name="fo-bar" value="${b.id}" style="accent-color:var(--accent);width:16px;height:16px">
       <span style="font-weight:600;flex:1">${b.barName}</span>
@@ -3316,8 +3317,8 @@ function pageFieldOps() {
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Select a bar to begin the visit checklist</div>
       <input class="inp" placeholder="Search bar…" value="${fieldOpsSearch}"
         id="fo-bar-search"
-        oninput="fieldOpsSearch=this.value;renderPage();setTimeout(()=>{const el=document.getElementById('fo-bar-search');if(el){const l=el.value.length;el.focus();el.setSelectionRange(l,l);}},50)" style="width:100%;margin-bottom:14px">
-      <div style="max-height:55vh;overflow-y:auto;margin-bottom:14px">${opts||'<div class="empty">No bars found</div>'}</div>
+        oninput="fieldOpsSearch=this.value;_filterRows('fo-bar-list',this.value)" style="width:100%;margin-bottom:14px">
+      <div id="fo-bar-list" style="max-height:55vh;overflow-y:auto;margin-bottom:14px">${opts}</div>
       <button class="btn btn-primary" style="width:100%" onclick="
         const sel=document.querySelector('input[name=fo-bar]:checked');
         if(!sel){alert('Please select a bar.');return;}
@@ -3331,6 +3332,7 @@ function pageFieldOps() {
     ${selectPanel}
     ${reportsPanel}
   </div>`;
+  if (fieldOpsSearch) setTimeout(() => _filterRows('fo-bar-list', fieldOpsSearch), 0);
   return html;
 }
 
