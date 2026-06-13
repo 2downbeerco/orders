@@ -3318,7 +3318,7 @@ function pageFieldOps() {
       <input class="inp" placeholder="Search bar…" value="${fieldOpsSearch}"
         id="fo-bar-search"
         oninput="fieldOpsSearch=this.value;_filterRows('fo-bar-list',this.value)" style="width:100%;margin-bottom:14px">
-      <div id="fo-bar-list" style="max-height:55vh;overflow-y:auto;margin-bottom:14px">${opts}</div>
+      <div id="fo-bar-list" style="max-height:55vh;overflow-y:auto;margin-bottom:14px;display:flex;flex-direction:column">${opts}</div>
       <button class="btn btn-primary" style="width:100%" onclick="
         const sel=document.querySelector('input[name=fo-bar]:checked');
         if(!sel){alert('Please select a bar.');return;}
