@@ -2652,13 +2652,37 @@ function startAutoSync() {
       }
 
       // Check special kegs rows for kegging/inv data changes
-      const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.growlerSales);
+      const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.fieldOpsNewBarReports && !k.growlerSales);
       if (kegRows.length > 0) {
         const oldKegJson = JSON.stringify(kegs.map(k=>k.kegNo+k.location+k.beer).sort());
         const newKegJson = JSON.stringify(kegRows.map(k=>k.kegNo+k.location+k.beer).sort());
         if (oldKegJson !== newKegJson) {
           kegs = kegRows;
           localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+          changed = true;
+        }
+      }
+
+      // Check if field ops reports changed
+      const foRow = remoteKegs.find(k => k && k.fieldOpsReports);
+      if (foRow) {
+        const oldFoJson = JSON.stringify(fieldOpsReports.map(r=>r.id).sort());
+        const newFoJson = JSON.stringify(foRow.fieldOpsReports.map(r=>r.id).sort());
+        if (oldFoJson !== newFoJson) {
+          fieldOpsReports = foRow.fieldOpsReports;
+          localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
+          changed = true;
+        }
+      }
+
+      // Check if new bar reports changed
+      const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
+      if (foNewRow) {
+        const oldNbJson = JSON.stringify(fieldOpsNewBarReports.map(r=>r.id).sort());
+        const newNbJson = JSON.stringify(foNewRow.fieldOpsNewBarReports.map(r=>r.id).sort());
+        if (oldNbJson !== newNbJson) {
+          fieldOpsNewBarReports = foNewRow.fieldOpsNewBarReports;
+          localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports));
           changed = true;
         }
       }
