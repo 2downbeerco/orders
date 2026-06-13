@@ -3099,6 +3099,7 @@ function showFieldOpsFilterDate() {
 
   // Get all dates that have reports (as YYYY-MM-DD local)
   const reportDates = new Set(fieldOpsReports.map(r => {
+    if (r.visitDate) return r.visitDate;
     const d = new Date(r.timestamp);
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }));
@@ -3185,7 +3186,10 @@ function pageFieldOps() {
   // Apply active filters to reports
   let filteredReports = fieldOpsReports.slice().reverse();
   if (fieldOpsFilterBar) filteredReports = filteredReports.filter(r => r.barName === fieldOpsFilterBar);
-  if (fieldOpsFilterDate) filteredReports = filteredReports.filter(r => r.timestamp && new Date(r.timestamp).toLocaleDateString('en-CA') === fieldOpsFilterDate);
+  if (fieldOpsFilterDate) filteredReports = filteredReports.filter(r => {
+    const d = r.visitDate || new Date(r.timestamp).toLocaleDateString('en-CA');
+    return d === fieldOpsFilterDate;
+  });
 
   const filterActive = fieldOpsFilterBar || fieldOpsFilterDate;
   const filterLabel = fieldOpsFilterBar ? fieldOpsFilterBar : fieldOpsFilterDate ? new Date(fieldOpsFilterDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
@@ -3205,11 +3209,14 @@ function pageFieldOps() {
         ? `<div class="empty" style="font-size:12px">${filterActive ? 'No reports match this filter' : 'No reports submitted yet'}</div>`
         : filteredReports.map(r => {
             const ts = new Date(r.timestamp);
-            const dateStr = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-            const timeStr = ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+            const visitLabel = r.visitDate
+              ? new Date(r.visitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+              : ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+            const submittedLabel = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) + ' at ' + ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+            const lateSubmit = r.visitDate && r.visitDate !== ts.toISOString().slice(0,10);
             return `<div style="padding:10px 0;border-bottom:1px solid var(--hover);cursor:pointer" onclick="showFieldOpsReport('${r.id}')">
               <div style="font-weight:600;font-size:13px">${r.barName}</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:2px">${dateStr} at ${timeStr}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Visit: ${visitLabel}${lateSubmit?` <span style="color:var(--orange)">· submitted ${submittedLabel}</span>`:''}</div>
             </div>`;
           }).join('')
       }
@@ -3252,6 +3259,8 @@ function pageFieldOps() {
       <div class="card" style="margin-bottom:14px">
         <div class="section-title" style="margin-bottom:14px">Checklist</div>
         <div style="display:grid;gap:12px">
+          <div><label class="lbl">Visit Date</label>
+            <input id="fo-visit-date" type="date" class="inp" style="width:200px" value="${new Date().toISOString().slice(0,10)}"></div>
           <div><label class="lbl">Tap and Kegerator Condition</label>
             <textarea id="fo-tap" class="inp" style="width:100%;height:65px;resize:vertical" placeholder="Notes on tap and kegerator condition…"></textarea></div>
           <div><label class="lbl">CO₂ Pressure</label>
@@ -3325,7 +3334,11 @@ function pageFieldOps() {
 function showFieldOpsReport(id) {
   const r = fieldOpsReports.find(x=>x.id===id);
   if (!r) return;
-  const ts = new Date(r.timestamp).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const submittedStr = new Date(r.timestamp).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const visitLabel = r.visitDate
+    ? new Date(r.visitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+    : submittedStr;
+  const lateSubmit = r.visitDate && r.visitDate !== new Date(r.timestamp).toISOString().slice(0,10);
   const fields = [
     ['Kegs Verified', r.kegs],
     ['Tap and Kegerator Condition', r.tap],
@@ -3349,7 +3362,8 @@ function showFieldOpsReport(id) {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
           <div>
             <div style="font-size:18px;font-weight:700">${r.barName}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">${ts}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Visit: ${visitLabel}</div>
+            ${lateSubmit ? `<div style="font-size:11px;color:var(--orange);margin-top:1px">Submitted: ${submittedStr}</div>` : ''}
           </div>
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
         </div>
@@ -3379,7 +3393,7 @@ function editFieldOpsReport(id) {
   renderPage();
   // Pre-fill fields after render
   setTimeout(() => {
-    if (document.getElementById('fo-tap')) document.getElementById('fo-tap').value = r.tap||'';
+    if (document.getElementById('fo-visit-date')) document.getElementById('fo-visit-date').value = r.visitDate || new Date(r.timestamp).toISOString().slice(0,10);
     if (document.getElementById('fo-co2')) document.getElementById('fo-co2').value = r.co2||'';
     if (document.getElementById('fo-temp')) document.getElementById('fo-temp').value = r.temp||'';
     if (document.getElementById('fo-comp')) document.getElementById('fo-comp').value = r.comp||'';
@@ -3399,9 +3413,11 @@ function editFieldOpsReport(id) {
 function submitFieldOps(barName, totalKegs) {
   const checked = [...document.querySelectorAll('.fo-keg-cb:checked')].map(cb=>cb.dataset.keg);
   const unchecked = [...document.querySelectorAll('.fo-keg-cb:not(:checked)')].map(cb=>cb.dataset.keg);
+  const visitDateVal = document.getElementById('fo-visit-date')?.value || new Date().toISOString().slice(0,10);
   const report = {
     id: editingFieldOpsId || uid(),
     timestamp: editingFieldOpsId ? (fieldOpsReports.find(x=>x.id===editingFieldOpsId)?.timestamp || new Date().toISOString()) : new Date().toISOString(),
+    visitDate: visitDateVal,
     barName,
     kegs: `${checked.length}/${totalKegs} verified${unchecked.length?' · Not found: '+unchecked.join(', '):''}`,
     tap: document.getElementById('fo-tap')?.value?.trim()||'',
