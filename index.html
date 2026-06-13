@@ -3058,8 +3058,10 @@ let dashExpandedBar = null;
 
 let fieldOpsBarId = null;
 let fieldOpsStep = 'select';
+let fieldOpsMode = 'landing';
 let fieldOpsSearch = '';
 let fieldOpsReports = [];
+let fieldOpsNewBarReports = [];
 let fieldOpsFilterBar = '';
 let fieldOpsFilterDate = '';
 
@@ -3182,6 +3184,142 @@ function pageFieldOps() {
   if (fieldOpsReports.length === 0) {
     try { const r = localStorage.getItem('2down_fieldops_reports'); if (r) fieldOpsReports = JSON.parse(r); } catch(_){}
   }
+  if (fieldOpsNewBarReports.length === 0) {
+    try { const r = localStorage.getItem('2down_fieldops_newbar'); if (r) fieldOpsNewBarReports = JSON.parse(r); } catch(_){}
+  }
+
+  // Landing screen
+  if (fieldOpsMode === 'landing') {
+    return `<div style="display:flex;flex-direction:column;gap:16px;max-width:640px;width:100%">
+      <div class="card">
+        <div class="section-title" style="margin-bottom:4px">Field Ops</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:20px">What type of visit are you logging?</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <button class="btn btn-primary" style="width:100%;padding:16px;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px"
+            onclick="fieldOpsMode='existing';renderPage()">
+            🏪 Existing Bar Visit
+          </button>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn btn-ghost" style="width:100%;padding:16px;font-size:15px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;gap:10px"
+              onclick="fieldOpsMode='new';renderPage()">
+              ✨ New Bar Visit
+            </button>
+            ${fieldOpsNewBarReports.length > 0 ? `<button class="btn btn-ghost btn-sm" style="align-self:flex-end" onclick="fieldOpsMode='new-reports';renderPage()">📋 View New Bar Reports (${fieldOpsNewBarReports.length})</button>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // New Bar Visit form
+  if (fieldOpsMode === 'new') {
+    const today = new Date().toISOString().slice(0,10);
+    return `<div style="display:flex;flex-direction:column;gap:16px;max-width:640px;width:100%">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <button class="btn btn-ghost btn-sm" onclick="fieldOpsMode='landing';renderPage()">← Back</button>
+          <div class="section-title" style="margin-bottom:0">New Bar Visit</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label class="lbl">Date of Visit *</label>
+            <input type="date" id="nb-date" class="inp" style="width:100%" value="${today}">
+          </div>
+          <div>
+            <label class="lbl">Name of Bar *</label>
+            <input type="text" id="nb-name" class="inp" style="width:100%" placeholder="e.g. The Tap Room">
+          </div>
+          <div>
+            <label class="lbl">Location</label>
+            <input type="text" id="nb-location" class="inp" style="width:100%" placeholder="e.g. Bandra West, Mumbai">
+          </div>
+          <div>
+            <label class="lbl">Craft Beer on Tap?</label>
+            <div style="display:flex;gap:16px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="radio" name="nb-craft" value="Yes" style="accent-color:var(--accent)" onchange="document.getElementById('nb-which-beer-row').style.display='block'"> Yes
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="radio" name="nb-craft" value="No" style="accent-color:var(--accent)" checked onchange="document.getElementById('nb-which-beer-row').style.display='none'"> No
+              </label>
+            </div>
+          </div>
+          <div id="nb-which-beer-row" style="display:none">
+            <label class="lbl">Which Beers on Tap?</label>
+            <input type="text" id="nb-beers" class="inp" style="width:100%" placeholder="e.g. Bira White, Simba Stout…">
+          </div>
+          <div>
+            <label class="lbl">Kegerator Available?</label>
+            <div style="display:flex;gap:16px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="radio" name="nb-kegerator" value="Yes" style="accent-color:var(--accent)"> Yes
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="radio" name="nb-kegerator" value="No" style="accent-color:var(--accent)" checked> No
+              </label>
+            </div>
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Point of Contact</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <label class="lbl">Name</label>
+                <input type="text" id="nb-poc-name" class="inp" style="width:100%" placeholder="Contact person's name">
+              </div>
+              <div>
+                <label class="lbl">Designation</label>
+                <input type="text" id="nb-poc-desig" class="inp" style="width:100%" placeholder="e.g. Manager, Owner">
+              </div>
+              <div>
+                <label class="lbl">Mobile Number</label>
+                <input type="tel" id="nb-poc-mobile" class="inp" style="width:100%" placeholder="e.g. 9876543210">
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="lbl">Comments / Next Step</label>
+            <textarea id="nb-comments" class="inp" style="width:100%;height:80px;resize:vertical" placeholder="Any observations or follow-up actions…"></textarea>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:20px;padding:14px;font-size:14px" onclick="submitNewBarVisit()">
+          Submit New Bar Visit →
+        </button>
+      </div>
+    </div>`;
+  }
+
+  // New bar all-reports view with filters
+  if (fieldOpsMode === 'new-reports') {
+    let filteredNew = fieldOpsNewBarReports.slice().reverse();
+    if (fieldOpsFilterBar) filteredNew = filteredNew.filter(r => r.barName === fieldOpsFilterBar);
+    if (fieldOpsFilterDate) filteredNew = filteredNew.filter(r => (r.visitDate||'') === fieldOpsFilterDate);
+    const filterActive = fieldOpsFilterBar || fieldOpsFilterDate;
+    const filterLabel = fieldOpsFilterBar ? fieldOpsFilterBar : fieldOpsFilterDate ? new Date(fieldOpsFilterDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+    return `<div style="display:flex;flex-direction:column;gap:16px;max-width:640px;width:100%">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <button class="btn btn-ghost btn-sm" onclick="fieldOpsFilterBar='';fieldOpsFilterDate='';fieldOpsMode='landing';renderPage()">← Back</button>
+          <div class="section-title" style="margin-bottom:0;flex:1">New Bar Reports</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="showNewBarFilterBar()" title="Filter by Bar">🏪</button>
+            <button class="btn btn-ghost btn-sm" onclick="showNewBarFilterDate()" title="Filter by Date">📅</button>
+            ${filterActive ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="fieldOpsFilterBar='';fieldOpsFilterDate='';renderPage()" title="Clear filter">✕</button>` : ''}
+          </div>
+        </div>
+        ${filterActive ? `<div style="font-size:11px;color:var(--orange);margin-bottom:8px">Showing: ${filterLabel}</div>` : ''}
+        ${filteredNew.length === 0
+          ? `<div class="empty" style="font-size:12px">${filterActive ? 'No reports match this filter' : 'No new bar visits yet'}</div>`
+          : filteredNew.map(r => {
+              const visitLabel = r.visitDate ? new Date(r.visitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+              return `<div style="padding:10px 0;border-bottom:1px solid var(--hover);cursor:pointer" onclick="showNewBarReport('${r.id}')">
+                <div style="font-weight:600;font-size:13px">${r.barName}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">${r.location||'No location'} · ${visitLabel}</div>
+              </div>`;
+            }).join('')
+        }
+      </div>
+    </div>`;
+  }
 
   // Apply active filters to reports
   let filteredReports = fieldOpsReports.slice().reverse();
@@ -3241,7 +3379,7 @@ function pageFieldOps() {
 
     const checklist = `<div style="flex:1;min-width:0">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <button class="btn btn-ghost btn-sm" onclick="fieldOpsStep='select';editingFieldOpsId=null;renderPage()">← Back</button>
+        <button class="btn btn-ghost btn-sm" onclick="fieldOpsStep='select';fieldOpsMode='existing';editingFieldOpsId=null;renderPage()">← Back</button>
         <div>
           <div style="font-size:18px;font-weight:700">${bar.barName}</div>
           <div style="font-size:12px;color:var(--muted)">${bar.area} · Field Ops Checklist</div>
@@ -3313,7 +3451,10 @@ function pageFieldOps() {
 
   const selectPanel = `<div style="flex:1;min-width:0">
     <div class="card">
-      <div class="section-title" style="margin-bottom:4px">Field Ops Checklist</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <button class="btn btn-ghost btn-sm" onclick="fieldOpsMode='landing';fieldOpsStep='select';renderPage()">← Back</button>
+        <div class="section-title" style="margin-bottom:0">Existing Bar Visit</div>
+      </div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Select a bar to begin the visit checklist</div>
       <input class="inp" placeholder="Search bar…" value="${fieldOpsSearch}"
         id="fo-bar-search"
@@ -3334,6 +3475,152 @@ function pageFieldOps() {
   </div>`;
   if (fieldOpsSearch) setTimeout(() => _filterRows('fo-bar-list', fieldOpsSearch), 0);
   return html;
+}
+
+function showNewBarFilterBar() {
+  const uniqueBars = [...new Set(fieldOpsNewBarReports.map(r=>r.barName))].sort();
+  if (!uniqueBars.length) { alert('No reports yet.'); return; }
+  const options = uniqueBars.map(name => {
+    const count = fieldOpsNewBarReports.filter(r=>r.barName===name).length;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px"
+      onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <input type="radio" name="nbf-bar" value="${name}" ${fieldOpsFilterBar===name?'checked':''} style="accent-color:var(--accent)">
+      <span style="font-weight:600;flex:1">${name}</span>
+      <span style="font-size:12px;color:var(--muted)">${count} report${count!==1?'s':''}</span>
+    </label>`;
+  }).join('');
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:400px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Filter by Bar</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="max-height:420px;overflow-y:auto;margin-bottom:14px">${options}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="fieldOpsFilterBar='';fieldOpsFilterDate='';closeModal();renderPage()">Clear</button>
+          <button class="btn btn-primary" onclick="
+            const sel=document.querySelector('input[name=nbf-bar]:checked');
+            if(!sel){alert('Please select a bar.');return;}
+            fieldOpsFilterBar=sel.value;fieldOpsFilterDate='';closeModal();renderPage();">Apply</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showNewBarFilterDate() {
+  if (!fieldOpsNewBarReports.length) { alert('No reports yet.'); return; }
+  const reportDates = new Set(fieldOpsNewBarReports.map(r => r.visitDate||'').filter(Boolean));
+  if (!window._nbCal) { const now = new Date(); window._nbCal = { year: now.getFullYear(), month: now.getMonth() }; }
+  const renderCal = () => {
+    const { year, month } = window._nbCal;
+    const monthLabel = new Date(year, month, 1).toLocaleString('en-IN', {month:'long', year:'numeric'});
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const startOffset = (firstDay + 6) % 7;
+    let cells = '';
+    for (let i = 0; i < startOffset; i++) cells += '<div></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const hasReport = reportDates.has(key);
+      const isSelected = fieldOpsFilterDate === key;
+      cells += `<div onclick="${hasReport ? `fieldOpsFilterDate='${key}';fieldOpsFilterBar='';closeModal();renderPage()` : ''}"
+        style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:13px;
+          ${hasReport ? `cursor:pointer;background:${isSelected?'var(--accent)':'var(--accent)22'};color:${isSelected?'#fff':'var(--accent)'};font-weight:700;` : 'color:var(--muted);'}">
+        ${d}
+      </div>`;
+    }
+    document.getElementById('nb-cal-body').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <button class="btn btn-ghost btn-sm" id="nb-cal-prev">‹</button>
+        <div style="font-weight:700;font-size:14px">${monthLabel}</div>
+        <button class="btn btn-ghost btn-sm" id="nb-cal-next">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,36px);gap:4px;justify-content:center;margin-bottom:8px">
+        ${['M','T','W','T','F','S','S'].map(d=>`<div style="width:36px;text-align:center;font-size:11px;font-weight:700;color:var(--muted)">${d}</div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,36px);gap:4px;justify-content:center">${cells}</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center">Highlighted dates have visit reports</div>`;
+    document.getElementById('nb-cal-prev')?.addEventListener('click', () => { window._nbCal.month--; if(window._nbCal.month<0){window._nbCal.month=11;window._nbCal.year--;} renderCal(); });
+    document.getElementById('nb-cal-next')?.addEventListener('click', () => { window._nbCal.month++; if(window._nbCal.month>11){window._nbCal.month=0;window._nbCal.year++;} renderCal(); });
+  };
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:340px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Filter by Date</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div id="nb-cal-body"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="fieldOpsFilterDate='';fieldOpsFilterBar='';closeModal();renderPage()">Clear</button>
+        </div>
+      </div>
+    </div>`;
+  renderCal();
+}
+
+function submitNewBarVisit() {
+  const barName = document.getElementById('nb-name')?.value?.trim();
+  if (!barName) { alert('Please enter the bar name.'); return; }
+  const report = {
+    id: uid(),
+    timestamp: new Date().toISOString(),
+    visitDate: document.getElementById('nb-date')?.value || new Date().toISOString().slice(0,10),
+    barName,
+    location: document.getElementById('nb-location')?.value?.trim()||'',
+    craftBeerOnTap: document.querySelector('input[name=nb-craft]:checked')?.value||'No',
+    beersOnTap: document.getElementById('nb-beers')?.value?.trim()||'',
+    kegeratorAvailable: document.querySelector('input[name=nb-kegerator]:checked')?.value||'No',
+    pocName: document.getElementById('nb-poc-name')?.value?.trim()||'',
+    pocDesignation: document.getElementById('nb-poc-desig')?.value?.trim()||'',
+    pocMobile: document.getElementById('nb-poc-mobile')?.value?.trim()||'',
+    comments: document.getElementById('nb-comments')?.value?.trim()||'',
+  };
+  fieldOpsNewBarReports.push(report);
+  try { localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports)); } catch(_){}
+  fieldOpsMode = 'landing';
+  renderPage();
+  setTimeout(()=>alert(`New bar visit submitted for ${barName}!`),100);
+}
+
+function showNewBarReport(id) {
+  const r = fieldOpsNewBarReports.find(x=>x.id===id);
+  if (!r) return;
+  const visitLabel = r.visitDate ? new Date(r.visitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+  const fields = [
+    ['Location', r.location],
+    ['Craft Beer on Tap', r.craftBeerOnTap],
+    ['Beers on Tap', r.beersOnTap],
+    ['Kegerator Available', r.kegeratorAvailable],
+    ['POC Name', r.pocName],
+    ['POC Designation', r.pocDesignation],
+    ['POC Mobile', r.pocMobile],
+    ['Comments / Next Step', r.comments],
+  ].filter(([,v])=>v).map(([l,v])=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--hover)">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">${l}</div>
+      <div style="font-size:13px;margin-top:3px">${v}</div>
+    </div>`).join('');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:480px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+          <div>
+            <div style="font-size:18px;font-weight:700">${r.barName}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Visit: ${visitLabel}</div>
+            <div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--accent)22;color:var(--accent)">New Bar</div>
+          </div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
+        <div style="margin-top:14px;display:flex;justify-content:space-between">
+          <button onclick="if(confirm('Delete this report?')){fieldOpsNewBarReports=fieldOpsNewBarReports.filter(x=>x.id!=='${r.id}');try{localStorage.setItem('2down_fieldops_newbar',JSON.stringify(fieldOpsNewBarReports));}catch(_){}closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
+          <button onclick="closeModal()" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 function showFieldOpsReport(id) {
@@ -3394,6 +3681,7 @@ function editFieldOpsReport(id) {
   editingFieldOpsId = id;
   fieldOpsBarId = bar.id;
   fieldOpsStep = 'checklist';
+  fieldOpsMode = 'existing';
   closeModal();
   renderPage();
   // Pre-fill fields after render
@@ -3445,6 +3733,7 @@ function submitFieldOps(barName, totalKegs) {
   editingFieldOpsId = null;
   saveFieldOpsReports();
   fieldOpsStep = 'select';
+  fieldOpsMode = 'landing';
   fieldOpsBarId = null;
   fieldOpsSearch = '';
   renderPage();
