@@ -2630,57 +2630,49 @@ function startAutoSync() {
 
       let changed = false;
 
-      // Check if orders changed
+      // Check if orders changed (content, not just IDs)
       if (remoteOrders.length > 0) {
         const newOrders = remoteOrders.filter(o => o && o.id && o.barId && o.deliveryDate && Array.isArray(o.items));
-        const oldJson = JSON.stringify(orders.map(o=>o.id).sort());
-        const newJson = JSON.stringify(newOrders.map(o=>o.id).sort());
-        if (oldJson !== newJson) {
+        if (JSON.stringify(newOrders) !== JSON.stringify(orders)) {
           orders = newOrders;
           localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
           changed = true;
         }
       }
 
-      // Check if bars changed
+      // Check if bars changed (content, not just count)
       if (remoteBars.length > 0) {
-        if (JSON.stringify(remoteBars.length) !== JSON.stringify(bars.length)) {
+        if (JSON.stringify(remoteBars) !== JSON.stringify(bars)) {
           bars = remoteBars;
           localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
           changed = true;
         }
       }
 
-      // Check special kegs rows for kegging/inv data changes
+      // Check if kegs changed (content)
       const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.fieldOpsNewBarReports && !k.growlerSales);
       if (kegRows.length > 0) {
-        const oldKegJson = JSON.stringify(kegs.map(k=>k.kegNo+k.location+k.beer).sort());
-        const newKegJson = JSON.stringify(kegRows.map(k=>k.kegNo+k.location+k.beer).sort());
-        if (oldKegJson !== newKegJson) {
+        if (JSON.stringify(kegRows) !== JSON.stringify(kegs)) {
           kegs = kegRows;
           localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
           changed = true;
         }
       }
 
-      // Check if field ops reports changed
+      // Check if field ops reports changed (content)
       const foRow = remoteKegs.find(k => k && k.fieldOpsReports);
       if (foRow) {
-        const oldFoJson = JSON.stringify(fieldOpsReports.map(r=>r.id).sort());
-        const newFoJson = JSON.stringify(foRow.fieldOpsReports.map(r=>r.id).sort());
-        if (oldFoJson !== newFoJson) {
+        if (JSON.stringify(foRow.fieldOpsReports) !== JSON.stringify(fieldOpsReports)) {
           fieldOpsReports = foRow.fieldOpsReports;
           localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
           changed = true;
         }
       }
 
-      // Check if new bar reports changed
+      // Check if new bar reports changed (content)
       const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
       if (foNewRow) {
-        const oldNbJson = JSON.stringify(fieldOpsNewBarReports.map(r=>r.id).sort());
-        const newNbJson = JSON.stringify(foNewRow.fieldOpsNewBarReports.map(r=>r.id).sort());
-        if (oldNbJson !== newNbJson) {
+        if (JSON.stringify(foNewRow.fieldOpsNewBarReports) !== JSON.stringify(fieldOpsNewBarReports)) {
           fieldOpsNewBarReports = foNewRow.fieldOpsNewBarReports;
           localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports));
           changed = true;
