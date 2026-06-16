@@ -2617,6 +2617,7 @@ const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authoriz
 let orders = [];
 let bars = [...BARS];
 let kegs = [];
+let brewStateBeers = []; // Loaded from brew_state table
 let activityLog = []; // [{id, timestamp, action, details}]
 
 let _autoSyncInterval = null;
@@ -2679,6 +2680,22 @@ function startAutoSync() {
           changed = true;
         }
       }
+
+      // Check if brew dashboard beers changed
+      try {
+        const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=eq.beers', { headers: SB_HDR });
+        if (brewRes.ok) {
+          const brewRows = await brewRes.json();
+          const beerRow = brewRows.find(r => r.key === 'beers');
+          if (beerRow && Array.isArray(beerRow.value)) {
+            if (JSON.stringify(beerRow.value) !== JSON.stringify(brewStateBeers)) {
+              brewStateBeers = beerRow.value;
+              localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
+              changed = true;
+            }
+          }
+        }
+      } catch(_) {}
 
       if (changed) {
         setSyncStatus('Updated ↓', '#16A34A');
@@ -2779,6 +2796,7 @@ async function loadData() {
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
   try { const fo = localStorage.getItem('2down_fieldops_reports'); if (fo) fieldOpsReports = JSON.parse(fo); } catch(_){}
   try { const fn = localStorage.getItem('2down_fieldops_newbar'); if (fn) fieldOpsNewBarReports = JSON.parse(fn); } catch(_){}
+  try { const bsb = localStorage.getItem('2down_brew_state_beers'); if (bsb) brewStateBeers = JSON.parse(bsb); } catch(_){}
 
   // Render immediately from localStorage
   renderNav();
@@ -2848,6 +2866,19 @@ async function loadData() {
         await Promise.all(kegs.slice(i, i+20).map(k => sbUpsert('kegs', k.kegNo, k)));
       }
     }
+
+    // Load brew dashboard beers
+    try {
+      const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=eq.beers', { headers: SB_HDR });
+      if (brewRes.ok) {
+        const brewRows = await brewRes.json();
+        const beerRow = brewRows.find(r => r.key === 'beers');
+        if (beerRow && Array.isArray(beerRow.value)) {
+          brewStateBeers = beerRow.value;
+          localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
+        }
+      }
+    } catch(_) {}
 
     setSyncStatus('Live', '#16A34A');
     setTimeout(() => setSyncStatus('', ''), 2000);
@@ -2960,7 +2991,8 @@ const NAV = [
   {id:'new-order', icon:'+', label:'New Order'},
   {id:'kegging',   icon:'⬡', label:'Kegging'},
   {id:'kegs',      icon:'⬤', label:'Kegs'},
-  {id:'beers',     icon:'🍺', label:'Beers'},
+  {id:'beers',     icon:'🍺', label:'Beer Stock'},
+  {id:'ourbeers',   icon:'🍻', label:'Our Beers'},
   {id:'bars',      icon:'≡', label:'Bars'},
   {id:'fieldops',  icon:'🔧', label:'Field Ops'},
   {id:'ratecard',  icon:'₹', label:'Rate Card'},
@@ -3056,6 +3088,7 @@ function _renderPage() {
     else if (currentTab==='kegging') c.innerHTML = pageKegging();
     else if (currentTab==='kegs') c.innerHTML = pageKegs();
     else if (currentTab==='beers') c.innerHTML = pageBeers();
+    else if (currentTab==='ourbeers') c.innerHTML = pageOurBeers();
     else if (currentTab==='bars') c.innerHTML = pageBars();
     else if (currentTab==='ratecard') c.innerHTML = pageRateCard();
     else if (currentTab==='invoicing') c.innerHTML = pageInvoicing();
@@ -6140,6 +6173,60 @@ function showKegHistory(kegNo) {
         </div>
       </div>
     </div>`;
+}
+
+// ── Our Beers Tab (read-only view from Brew Dashboard) ───────────────────
+function pageOurBeers() {
+  if (!brewStateBeers.length) {
+    return `<div class="card" style="max-width:640px">
+      <div class="section-title" style="margin-bottom:6px">Our Beers</div>
+      <div class="empty">No beer data loaded yet. Data syncs from the Brew Dashboard every 30 seconds.</div>
+    </div>`;
+  }
+
+  const active = brewStateBeers.filter(b => b.active !== false);
+  const inactive = brewStateBeers.filter(b => b.active === false);
+
+  const activeCards = active.map(b => `
+    <div class="card" style="border-top:4px solid ${b.color||'#888'};padding:20px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div>
+          <div style="font-size:17px;font-weight:700">${b.name}</div>
+          <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-top:2px">${b.code}</div>
+        </div>
+        <div style="width:14px;height:14px;border-radius:50%;background:${b.color||'#888'};flex-shrink:0;margin-top:4px"></div>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-top:10px">${b.style||'—'}</div>
+      <div style="display:flex;gap:16px;margin-top:12px;font-size:13px">
+        ${b.abv ? `<div><span style="font-weight:700">${b.abv}%</span> <span style="color:var(--muted)">ABV</span></div>` : ''}
+        ${b.ibu ? `<div><span style="font-weight:700">${b.ibu}</span> <span style="color:var(--muted)">IBU</span></div>` : ''}
+        ${b.og  ? `<div><span style="font-weight:700">${b.og}</span>  <span style="color:var(--muted)">OG</span></div>`  : ''}
+      </div>
+      ${b.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${b.notes}</div>` : ''}
+    </div>`).join('');
+
+  const retiredHtml = inactive.length ? `
+    <div class="section-title" style="margin-bottom:12px;margin-top:28px">Retired Beers</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${inactive.map(b => `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${b.color||'#888'};opacity:0.4"></div>
+          <span style="font-size:13px;color:var(--muted)">${b.name} <span style="font-size:11px">(${b.code})</span></span>
+        </div>`).join('')}
+    </div>` : '';
+
+  return `<div style="max-width:900px;width:100%">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:16px;font-weight:700">Our Beers</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">${active.length} active · ${inactive.length} retired · synced from Brew Dashboard</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:28px">
+      ${activeCards}
+    </div>
+    ${retiredHtml}
+  </div>`;
 }
 
 // ── Beers Tab ─────────────────────────────────────────────────────────────
