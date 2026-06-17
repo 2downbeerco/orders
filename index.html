@@ -2621,91 +2621,148 @@ let brewStateBeers = []; // Loaded from brew_state table
 let activityLog = []; // [{id, timestamp, action, details}]
 
 let _autoSyncInterval = null;
+let _realtimeWs = null;
+
+// Fetch and apply latest data from Supabase, re-render if anything changed
+async function syncAllData() {
+  try {
+    const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([
+      sbGet('orders'), sbGet('bars'), sbGet('kegs')
+    ]);
+    let changed = false;
+
+    if (remoteOrders.length > 0) {
+      const newOrders = remoteOrders.filter(o => o && o.id && o.barId && o.deliveryDate && Array.isArray(o.items));
+      if (JSON.stringify(newOrders) !== JSON.stringify(orders)) {
+        orders = newOrders;
+        localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
+        changed = true;
+      }
+    }
+
+    if (remoteBars.length > 0) {
+      if (JSON.stringify(remoteBars) !== JSON.stringify(bars)) {
+        bars = remoteBars;
+        localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
+        changed = true;
+      }
+    }
+
+    const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.fieldOpsNewBarReports && !k.growlerSales);
+    if (kegRows.length > 0) {
+      if (JSON.stringify(kegRows) !== JSON.stringify(kegs)) {
+        kegs = kegRows;
+        localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+        changed = true;
+      }
+    }
+
+    const foRow = remoteKegs.find(k => k && k.fieldOpsReports);
+    if (foRow && JSON.stringify(foRow.fieldOpsReports) !== JSON.stringify(fieldOpsReports)) {
+      fieldOpsReports = foRow.fieldOpsReports;
+      localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
+      changed = true;
+    }
+
+    const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
+    if (foNewRow && JSON.stringify(foNewRow.fieldOpsNewBarReports) !== JSON.stringify(fieldOpsNewBarReports)) {
+      fieldOpsNewBarReports = foNewRow.fieldOpsNewBarReports;
+      localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports));
+      changed = true;
+    }
+
+    if (changed) {
+      setSyncStatus('Updated ↓', '#16A34A');
+      setTimeout(() => setSyncStatus('', ''), 2000);
+      try { renderPage(); } catch(e) {}
+    }
+  } catch(e) { /* silent fail */ }
+}
+
+// Separately poll brew_state every 10s (no realtime on that table)
+async function syncBrewBeers() {
+  try {
+    const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=eq.beers', { headers: SB_HDR });
+    if (!brewRes.ok) return;
+    const brewRows = await brewRes.json();
+    const beerRow = brewRows.find(r => r.key === 'beers');
+    if (beerRow && Array.isArray(beerRow.value) && JSON.stringify(beerRow.value) !== JSON.stringify(brewStateBeers)) {
+      brewStateBeers = beerRow.value;
+      localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
+      setSyncStatus('Updated ↓', '#16A34A');
+      setTimeout(() => setSyncStatus('', ''), 2000);
+      try { renderPage(); } catch(e) {}
+    }
+  } catch(e) {}
+}
 
 function startAutoSync() {
+  // Clear any existing connections
   if (_autoSyncInterval) clearInterval(_autoSyncInterval);
-  _autoSyncInterval = setInterval(async () => {
-    try {
-      const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([
-        sbGet('orders'), sbGet('bars'), sbGet('kegs')
-      ]);
+  if (_realtimeWs) { try { _realtimeWs.close(); } catch(e){} _realtimeWs = null; }
 
-      let changed = false;
+  // Supabase Realtime websocket — subscribes to changes on orders, bars, kegs tables
+  try {
+    const wsUrl = SB_URL.replace('https://', 'wss://') + '/realtime/v1/websocket?apikey=' + SB_KEY + '&vsn=1.0.0';
+    const ws = new WebSocket(wsUrl);
+    _realtimeWs = ws;
+    let heartbeatTimer = null;
 
-      // Check if orders changed (content, not just IDs)
-      if (remoteOrders.length > 0) {
-        const newOrders = remoteOrders.filter(o => o && o.id && o.barId && o.deliveryDate && Array.isArray(o.items));
-        if (JSON.stringify(newOrders) !== JSON.stringify(orders)) {
-          orders = newOrders;
-          localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
-          changed = true;
-        }
-      }
-
-      // Check if bars changed (content, not just count)
-      if (remoteBars.length > 0) {
-        if (JSON.stringify(remoteBars) !== JSON.stringify(bars)) {
-          bars = remoteBars;
-          localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
-          changed = true;
-        }
-      }
-
-      // Check if kegs changed (content)
-      const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.fieldOpsNewBarReports && !k.growlerSales);
-      if (kegRows.length > 0) {
-        if (JSON.stringify(kegRows) !== JSON.stringify(kegs)) {
-          kegs = kegRows;
-          localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
-          changed = true;
-        }
-      }
-
-      // Check if field ops reports changed (content)
-      const foRow = remoteKegs.find(k => k && k.fieldOpsReports);
-      if (foRow) {
-        if (JSON.stringify(foRow.fieldOpsReports) !== JSON.stringify(fieldOpsReports)) {
-          fieldOpsReports = foRow.fieldOpsReports;
-          localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports));
-          changed = true;
-        }
-      }
-
-      // Check if new bar reports changed (content)
-      const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
-      if (foNewRow) {
-        if (JSON.stringify(foNewRow.fieldOpsNewBarReports) !== JSON.stringify(fieldOpsNewBarReports)) {
-          fieldOpsNewBarReports = foNewRow.fieldOpsNewBarReports;
-          localStorage.setItem('2down_fieldops_newbar', JSON.stringify(fieldOpsNewBarReports));
-          changed = true;
-        }
-      }
-
-      // Check if brew dashboard beers changed
-      try {
-        const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=eq.beers', { headers: SB_HDR });
-        if (brewRes.ok) {
-          const brewRows = await brewRes.json();
-          const beerRow = brewRows.find(r => r.key === 'beers');
-          if (beerRow && Array.isArray(beerRow.value)) {
-            if (JSON.stringify(beerRow.value) !== JSON.stringify(brewStateBeers)) {
-              brewStateBeers = beerRow.value;
-              localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
-              changed = true;
-            }
+    ws.onopen = () => {
+      // Join the realtime channel for postgres changes
+      const joinMsg = JSON.stringify({
+        topic: 'realtime:*',
+        event: 'phx_join',
+        payload: {
+          config: {
+            broadcast: { self: false },
+            postgres_changes: [
+              { event: '*', schema: 'public', table: 'orders' },
+              { event: '*', schema: 'public', table: 'bars' },
+              { event: '*', schema: 'public', table: 'kegs' },
+            ]
           }
+        },
+        ref: '1'
+      });
+      ws.send(joinMsg);
+      // Heartbeat every 20s to keep connection alive
+      heartbeatTimer = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: null }));
+        }
+      }, 20000);
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        // Trigger a full re-fetch on any postgres_changes event
+        if (msg.event === 'postgres_changes' || (msg.payload && msg.payload.data && msg.payload.data.type)) {
+          syncAllData();
         }
       } catch(_) {}
+    };
 
-      if (changed) {
-        setSyncStatus('Updated ↓', '#16A34A');
-        setTimeout(() => setSyncStatus('', ''), 2000);
-        try { renderPage(); } catch(e) {}
-      }
-    } catch(e) {
-      // Silent fail — don't show error for background sync
-    }
-  }, 30000); // every 30 seconds
+    ws.onerror = () => {
+      // Fall back to polling on websocket error
+      if (!_autoSyncInterval) _autoSyncInterval = setInterval(syncAllData, 5000);
+    };
+
+    ws.onclose = () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      _realtimeWs = null;
+      // Reconnect after 3s
+      setTimeout(startAutoSync, 3000);
+    };
+  } catch(e) {
+    // WebSocket not supported — fall back to polling
+    _autoSyncInterval = setInterval(syncAllData, 5000);
+  }
+
+  // brew_state has no realtime subscription — poll every 10s
+  if (_autoSyncInterval) clearInterval(_autoSyncInterval);
+  _autoSyncInterval = setInterval(syncBrewBeers, 10000);
 }
 
 function setSyncStatus(msg, color) {
