@@ -2622,9 +2622,11 @@ let activityLog = []; // [{id, timestamp, action, details}]
 
 let _autoSyncInterval = null;
 let _realtimeWs = null;
+let _syncLocked = 0; // counter — incoming sync is skipped while > 0
 
 // Fetch and apply latest data from Supabase, re-render if anything changed
 async function syncAllData() {
+  if (_syncLocked > 0) return; // a local write is in-flight — skip this sync round to avoid clobbering it
   try {
     const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([
       sbGet('orders'), sbGet('bars'), sbGet('kegs')
@@ -2817,7 +2819,10 @@ function logActivity(action, details) {
 
 async function saveActivityLog() {
   localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
-  try { await sbUpsert('kegs', '__activity_log__', { activityLog }); } catch(_) {}
+  _syncLocked++;
+  try { await sbUpsert('kegs', '__activity_log__', { activityLog }); }
+  catch(e) { console.error('saveActivityLog failed:', e); }
+  finally { _syncLocked--; }
 }
 
 async function loadActivityLog() {
@@ -2956,30 +2961,48 @@ async function saveOrders() {
   orders = orders.filter(o => o && o.id != null && o.id !== '');
   localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
   showToast();
+  _syncLocked++;
   try {
     await Promise.all(orders.map(o => sbUpsert('orders', String(o.id), o)));
     setSyncStatus('Saved', '#16A34A');
     setTimeout(() => setSyncStatus('', ''), 1500);
-  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+  } catch(e) {
+    setSyncStatus('Saved locally', '#DC2626');
+    console.error('saveOrders failed:', e);
+  } finally {
+    _syncLocked--;
+  }
 }
 
 async function saveBars() {
   localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
   showToast();
+  _syncLocked++;
   try {
     await Promise.all(bars.map(b => sbUpsert('bars', String(b.id), b)));
     setSyncStatus('Saved', '#16A34A');
     setTimeout(() => setSyncStatus('', ''), 1500);
-  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+  } catch(e) {
+    setSyncStatus('Saved locally', '#DC2626');
+    console.error('saveBars failed:', e);
+  } finally {
+    _syncLocked--;
+  }
 }
 
 async function saveKegs() {
   localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+  _syncLocked++;
   try {
     await Promise.all(kegs.map(k => sbUpsert('kegs', k.kegNo, k)));
     setSyncStatus('Saved', '#16A34A');
     setTimeout(() => setSyncStatus('', ''), 1500);
-  } catch(e) { setSyncStatus('Saved locally', '#DC2626'); }
+  } catch(e) {
+    setSyncStatus('Saved locally', '#DC2626');
+    console.error('saveKegs failed:', e);
+  } finally {
+    _syncLocked--;
+  }
 }
 
 function showToast() {
@@ -5039,7 +5062,7 @@ function pageKegging() {
     </div>`;
 }
 
-function assignKeg(orderId, kegNo, beerBatch) {
+async function assignKeg(orderId, kegNo, beerBatch) {
   if (!kegNo) { alert('Please select a keg number.'); return; }
   if (!beerBatch) { alert('Please select the beer and batch.'); return; }
   const [beerCode, batch] = beerBatch.split('|');
@@ -5057,8 +5080,8 @@ function assignKeg(orderId, kegNo, beerBatch) {
   k.location = bar ? bar.barName : 'Dispatched';
   k.beer = beerCode;
   logKegEvent(kegNo, 'Dispatched', { beer: beerCode, batch: batch||'', location: k.location, deliveryDate: o.deliveryDate, orderId: o.id });
-  saveOrders();
-  saveKegs();
+  await saveOrders();
+  await saveKegs();
   renderPage();
 }
 
@@ -6097,7 +6120,7 @@ function toggleReturnKeg(kegNo, add) {
   renderPage();
 }
 
-function returnKegs() {
+async function returnKegs() {
   if (returnSelected.size === 0) return;
   const kegNos = [...returnSelected];
   kegs = kegs.map(k => {
@@ -6107,10 +6130,17 @@ function returnKegs() {
     }
     return k;
   });
-  logActivity('Kegs Returned', `${kegNos.join(', ')} → Brewery`);
   returnSelected.clear();
-  saveKegs();
-  showToast();
+  try {
+    await saveKegs();
+    logActivity('Kegs Returned', `${kegNos.join(', ')} → Brewery`);
+    // Give the fire-and-forget save inside logActivity a moment to start before we release the lock
+    await new Promise(r => setTimeout(r, 50));
+    showToast();
+  } catch(e) {
+    console.error('returnKegs failed:', e);
+    alert('Could not save the keg return to the server. Please check your connection and try again — the kegs were not marked as returned.');
+  }
   renderPage();
 }
 
