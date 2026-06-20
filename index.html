@@ -2623,6 +2623,7 @@ let activityLog = []; // [{id, timestamp, action, details}]
 let _autoSyncInterval = null;
 let _realtimeWs = null;
 let _syncLocked = 0; // counter — incoming sync is skipped while > 0
+let _brewPollInterval = null;
 
 // Fetch and apply latest data from Supabase, re-render if anything changed
 async function syncAllData() {
@@ -2701,7 +2702,7 @@ async function syncBrewBeers() {
 function startAutoSync() {
   // Clear any existing connections
   if (_autoSyncInterval) clearInterval(_autoSyncInterval);
-  if (_realtimeWs) { try { _realtimeWs.close(); } catch(e){} _realtimeWs = null; }
+  if (_realtimeWs) { try { _realtimeWs.onclose = null; _realtimeWs.close(); } catch(e){} _realtimeWs = null; }
 
   // Supabase Realtime websocket — subscribes to changes on orders, bars, kegs tables
   try {
@@ -2709,8 +2710,10 @@ function startAutoSync() {
     const ws = new WebSocket(wsUrl);
     _realtimeWs = ws;
     let heartbeatTimer = null;
+    let missedHeartbeats = 0;
 
     ws.onopen = () => {
+      missedHeartbeats = 0;
       // Join the realtime channel for postgres changes
       const joinMsg = JSON.stringify({
         topic: 'realtime:*',
@@ -2728,12 +2731,20 @@ function startAutoSync() {
         ref: '1'
       });
       ws.send(joinMsg);
-      // Heartbeat every 20s to keep connection alive
+      // Heartbeat every 15s to keep connection alive; if we can't even attempt to send
+      // (socket already dead), force a reconnect rather than silently doing nothing.
       heartbeatTimer = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: null }));
+        } else {
+          missedHeartbeats++;
+          if (missedHeartbeats >= 2) {
+            try { ws.close(); } catch(e) {}
+          }
         }
-      }, 20000);
+      }, 15000);
+      // Do an immediate full sync on (re)connect in case anything was missed while disconnected
+      syncAllData();
     };
 
     ws.onmessage = (e) => {
@@ -2747,24 +2758,42 @@ function startAutoSync() {
     };
 
     ws.onerror = () => {
-      // Fall back to polling on websocket error
-      if (!_autoSyncInterval) _autoSyncInterval = setInterval(syncAllData, 5000);
+      // Force-close so onclose fires and the reconnect path runs — don't leave a half-dead socket around
+      try { ws.close(); } catch(e) {}
     };
 
     ws.onclose = () => {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
-      _realtimeWs = null;
+      if (_realtimeWs === ws) _realtimeWs = null;
       // Reconnect after 3s
       setTimeout(startAutoSync, 3000);
     };
   } catch(e) {
     // WebSocket not supported — fall back to polling
-    _autoSyncInterval = setInterval(syncAllData, 5000);
+    if (!_autoSyncInterval) _autoSyncInterval = setInterval(syncAllData, 5000);
   }
 
   // brew_state has no realtime subscription — poll every 10s
-  if (_autoSyncInterval) clearInterval(_autoSyncInterval);
-  _autoSyncInterval = setInterval(syncBrewBeers, 10000);
+  if (_brewPollInterval) clearInterval(_brewPollInterval);
+  _brewPollInterval = setInterval(syncBrewBeers, 10000);
+}
+
+// Force a fresh sync + reconnect whenever the tab becomes visible again or the
+// network comes back — covers laptop sleep, tab backgrounding, and OS timer throttling
+// that can silently kill the websocket without onclose firing promptly.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      syncAllData();
+      syncBrewBeers();
+      if (!_realtimeWs || _realtimeWs.readyState !== WebSocket.OPEN) {
+        startAutoSync();
+      }
+    }
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { startAutoSync(); });
 }
 
 function setSyncStatus(msg, color) {
