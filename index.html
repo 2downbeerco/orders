@@ -3405,11 +3405,13 @@ function pageFieldOps() {
     if (fieldOpsFilterDate) filteredNew = filteredNew.filter(r => (r.visitDate||'') === fieldOpsFilterDate);
     const filterActive = fieldOpsFilterBar || fieldOpsFilterDate;
     const filterLabel = fieldOpsFilterBar ? fieldOpsFilterBar : fieldOpsFilterDate ? new Date(fieldOpsFilterDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+    const totalNewCount = filteredNew.length;
+    if (!filterActive) filteredNew = filteredNew.slice(0, 10);
     return `<div style="display:flex;flex-direction:column;gap:16px;max-width:640px;width:100%">
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
           <button class="btn btn-ghost btn-sm" onclick="fieldOpsFilterBar='';fieldOpsFilterDate='';fieldOpsMode='landing';renderPage()">← Back</button>
-          <div class="section-title" style="margin-bottom:0;flex:1">New Bar Reports</div>
+          <div class="section-title" style="margin-bottom:0;flex:1">New Bar Reports${!filterActive && totalNewCount > 10 ? ` <span style="font-size:11px;font-weight:400;color:var(--muted)">(last 10 of ${totalNewCount})</span>` : ''}</div>
           <div style="display:flex;gap:6px">
             <button class="btn btn-ghost btn-sm" onclick="showNewBarFilterBar()" title="Filter by Bar">🏪</button>
             <button class="btn btn-ghost btn-sm" onclick="showNewBarFilterDate()" title="Filter by Date">📅</button>
@@ -3442,7 +3444,7 @@ function pageFieldOps() {
   }
 
   // Apply active filters to reports
-  let filteredReports = fieldOpsReports.slice().reverse();
+  let filteredReports = fieldOpsReports.slice();
   if (fieldOpsFilterBar) filteredReports = filteredReports.filter(r => r.barName === fieldOpsFilterBar);
   if (fieldOpsFilterDate) filteredReports = filteredReports.filter(r => {
     const d = r.visitDate || new Date(r.timestamp).toLocaleDateString('en-CA');
@@ -3451,11 +3453,13 @@ function pageFieldOps() {
 
   const filterActive = fieldOpsFilterBar || fieldOpsFilterDate;
   const filterLabel = fieldOpsFilterBar ? fieldOpsFilterBar : fieldOpsFilterDate ? new Date(fieldOpsFilterDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  const totalReportCount = filteredReports.length;
+  if (!filterActive) filteredReports = filteredReports.slice(0, 10);
 
   const reportsPanel = `
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div class="section-title" style="margin-bottom:0">Visit Reports</div>
+        <div class="section-title" style="margin-bottom:0">Visit Reports${!filterActive && totalReportCount > 10 ? ` <span style="font-size:11px;font-weight:400;color:var(--muted)">(last 10 of ${totalReportCount})</span>` : ''}</div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-ghost btn-sm" onclick="showFieldOpsFilterBar()" title="Filter by Bar">🏪</button>
           <button class="btn btn-ghost btn-sm" onclick="showFieldOpsFilterDate()" title="Filter by Date">📅</button>
