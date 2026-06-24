@@ -509,7 +509,7 @@ const KEG_SEED = [
     "size": 20,
     "make": "Cubic",
     "kegNo": "20C1-12",
-    "location": "PF Chang's Lower Parel",
+    "location": "PF Chang's Lodha",
     "beer": "DC24",
     "missing": false
   },
@@ -581,7 +581,7 @@ const KEG_SEED = [
     "size": 20,
     "make": "Cubic",
     "kegNo": "20C1-21",
-    "location": "PF Chang's Lower Parel",
+    "location": "PF Chang's Lodha",
     "beer": "MP40",
     "missing": false
   },
@@ -1197,7 +1197,7 @@ const KEG_SEED = [
     "size": 20,
     "make": "Cubic",
     "kegNo": "20C2-25",
-    "location": "PF Chang's Lower Parel",
+    "location": "PF Chang's Lodha",
     "beer": "DC24",
     "missing": false
   },
@@ -1293,7 +1293,7 @@ const KEG_SEED = [
     "size": 20,
     "make": "Cubic",
     "kegNo": "20C2-37",
-    "location": "PF Chang's Lower Parel",
+    "location": "PF Chang's Lodha",
     "beer": "BB50",
     "missing": false
   },
@@ -1461,7 +1461,7 @@ const KEG_SEED = [
     "size": 20,
     "make": "Cubic",
     "kegNo": "20C2-58",
-    "location": "PF Chang's Lower Parel",
+    "location": "PF Chang's Lodha",
     "beer": "MP39",
     "missing": false
   },
@@ -1949,7 +1949,7 @@ const KEG_SEED = [
     "size": 20,
     "make": "Brew Driver",
     "kegNo": "20B1-14",
-    "location": "PF Chang's Lower Parel",
+    "location": "PF Chang's Lodha",
     "beer": "BB48",
     "missing": false
   },
@@ -2626,6 +2626,23 @@ let _syncLocked = 0; // counter — incoming sync is skipped while > 0
 let _brewPollInterval = null;
 
 // Fetch and apply latest data from Supabase, re-render if anything changed
+// One-time migration: normalise old bar name variants in live keg data
+let _kegNameMigrationDone = false;
+async function migrateKegLocationNames() {
+  if (_kegNameMigrationDone) return;
+  _kegNameMigrationDone = true;
+  const renames = { "PF Chang's Lower Parel": "PF Chang's Lodha" };
+  let changed = false;
+  kegs = kegs.map(k => {
+    if (renames[k.location]) { changed = true; return { ...k, location: renames[k.location] }; }
+    return k;
+  });
+  if (changed) {
+    console.log('Migrated keg location names');
+    await saveKegs();
+  }
+}
+
 async function syncAllData() {
   if (_syncLocked > 0) return; // a local write is in-flight — skip this sync round to avoid clobbering it
   try {
@@ -2975,6 +2992,7 @@ async function loadData() {
     setTimeout(() => setSyncStatus('', ''), 2000);
     editingBatchIdx = null;
     editingKegNo = null;
+    await migrateKegLocationNames(); // normalise any old bar name variants
     try { renderPage(); } catch(e) { console.error('renderPage error:', e); }
     startAutoSync(); // begin polling for changes
   } catch(e) {
