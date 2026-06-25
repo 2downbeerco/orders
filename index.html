@@ -2707,6 +2707,10 @@ async function syncBrewBeers() {
     if (!brewRes.ok) return;
     const brewRows = await brewRes.json();
     const beerRow = brewRows.find(r => r.key === 'beers');
+    const tankRow = brewRows.find(r => r.key === 'tanks');
+    if (tankRow && Array.isArray(tankRow.value)) {
+      brewStateTanks = tankRow.value;
+    }
     if (beerRow && Array.isArray(beerRow.value) && JSON.stringify(beerRow.value) !== JSON.stringify(brewStateBeers)) {
       brewStateBeers = beerRow.value;
       localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
@@ -2976,15 +2980,19 @@ async function loadData() {
       }
     }
 
-    // Load brew dashboard beers
+    // Load brew dashboard beers + tanks
     try {
       const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beers,tanks)', { headers: SB_HDR });
       if (brewRes.ok) {
         const brewRows = await brewRes.json();
         const beerRow = brewRows.find(r => r.key === 'beers');
+        const tankRow = brewRows.find(r => r.key === 'tanks');
         if (beerRow && Array.isArray(beerRow.value)) {
           brewStateBeers = beerRow.value;
           localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
+        }
+        if (tankRow && Array.isArray(tankRow.value)) {
+          brewStateTanks = tankRow.value;
         }
       }
     } catch(_) {}
@@ -4685,7 +4693,7 @@ function updateFillSourceOpts(pKey) {
   if (isTank && beerSel && beerSel.value) {
     const [beerCode] = beerSel.value.split('|');
     const tanks = (brewStateTanks||[]).filter(t=>
-      t.beer===beerCode && ['Ready','Fermenting','Conditioning','Carbonating'].includes(t.stage)
+      t.beer===beerCode && t.stage==='Ready'
     );
     tankSel.innerHTML = '<option value="">Select tank…</option>' +
       tanks.map(t=>`<option value="${t.id}">${t.name} — ${t.vol||0}L (${t.stage})</option>`).join('');
