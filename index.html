@@ -2618,6 +2618,7 @@ let orders = [];
 let bars = [...BARS];
 let kegs = [];
 let brewStateBeers = []; // Loaded from brew_state table
+let brewStateTanks  = []; // Loaded from brew_state table
 let activityLog = []; // [{id, timestamp, action, details}]
 
 let _autoSyncInterval = null;
@@ -2702,7 +2703,7 @@ async function syncAllData() {
 // Separately poll brew_state every 10s (no realtime on that table)
 async function syncBrewBeers() {
   try {
-    const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=eq.beers', { headers: SB_HDR });
+    const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beers,tanks)', { headers: SB_HDR });
     if (!brewRes.ok) return;
     const brewRows = await brewRes.json();
     const beerRow = brewRows.find(r => r.key === 'beers');
@@ -2977,7 +2978,7 @@ async function loadData() {
 
     // Load brew dashboard beers
     try {
-      const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=eq.beers', { headers: SB_HDR });
+      const brewRes = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beers,tanks)', { headers: SB_HDR });
       if (brewRes.ok) {
         const brewRows = await brewRes.json();
         const beerRow = brewRows.find(r => r.key === 'beers');
@@ -4451,8 +4452,21 @@ function pageOrders() {
           <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
             <div>
               <label class="lbl">Beer + Batch</label>
-              <select id="pbeer-${pKey}" class="inp" style="width:200px;font-size:12px">
+              <select id="pbeer-${pKey}" class="inp" style="width:200px;font-size:12px" onchange="updateFillSourceOpts('${pKey}')">
                 <option value="">Select beer+batch…</option>${beerOpts}
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Source</label>
+              <select id="psource-${pKey}" class="inp" style="width:130px;font-size:12px" onchange="updateFillSourceOpts('${pKey}')">
+                <option value="coldroom">Cold Room</option>
+                <option value="tank">Tank</option>
+              </select>
+            </div>
+            <div id="ptank-wrap-${pKey}" style="display:none;">
+              <label class="lbl">Tank</label>
+              <select id="ptank-${pKey}" class="inp" style="width:150px;font-size:12px">
+                <option value="">Select tank…</option>
               </select>
             </div>
             <div>
@@ -4660,6 +4674,24 @@ function startKegFill(orderId, size) {
   _renderPage();
 }
 
+function updateFillSourceOpts(pKey) {
+  const sourceSel = document.getElementById(`psource-${pKey}`);
+  const tankWrap  = document.getElementById(`ptank-wrap-${pKey}`);
+  const tankSel   = document.getElementById(`ptank-${pKey}`);
+  const beerSel   = document.getElementById(`pbeer-${pKey}`);
+  if (!sourceSel || !tankWrap || !tankSel) return;
+  const isTank = sourceSel.value === 'tank';
+  tankWrap.style.display = isTank ? 'block' : 'none';
+  if (isTank && beerSel && beerSel.value) {
+    const [beerCode] = beerSel.value.split('|');
+    const tanks = (brewStateTanks||[]).filter(t=>
+      t.beer===beerCode && ['Ready','Fermenting','Conditioning','Carbonating'].includes(t.stage)
+    );
+    tankSel.innerHTML = '<option value="">Select tank…</option>' +
+      tanks.map(t=>`<option value="${t.id}">${t.name} — ${t.vol||0}L (${t.stage})</option>`).join('');
+  }
+}
+
 function addPendingFill(pKey) {
   const beerSel = document.getElementById(`pbeer-${pKey}`);
   const litresInp = document.getElementById(`plitres-${pKey}`);
@@ -4670,7 +4702,13 @@ function addPendingFill(pKey) {
   if (!litres || litres <= 0) { alert('Please enter a valid litres amount.'); return; }
   const [beerCode, batch] = beerBatch.split('|');
   if (!pendingKegFills[pKey]) return;
-  pendingKegFills[pKey].fills.push({ beer: beerCode, batch: batch||'', litres });
+  const sourceSel = document.getElementById(`psource-${pKey}`);
+  const tankSel   = document.getElementById(`ptank-${pKey}`);
+  const source = sourceSel ? sourceSel.value : 'coldroom';
+  const tankId = (source==='tank' && tankSel) ? tankSel.value : null;
+  const tankName = (source==='tank' && tankSel && tankSel.selectedIndex>0) ? tankSel.options[tankSel.selectedIndex].text : null;
+  if (source==='tank' && !tankId) { alert('Please select a tank.'); return; }
+  pendingKegFills[pKey].fills.push({ beer: beerCode, batch: batch||'', litres, source, tankId, tankName });
   litresInp.value = '';
   _renderPage();
 }
@@ -4735,10 +4773,57 @@ function commitKegAssign(orderId, pKey) {
 
   logActivity('Keg Assigned', `${pending.kegNo} → ${k.location} · ${primaryFill.beer}${primaryFill.batch||''}`);
 
+  // Push stock deductions to brew ops
+  pushBrewDeductions(pending.fills);
+
   delete pendingKegFills[pKey];
   saveOrders();
   saveKegs();
   renderPage();
+}
+
+async function pushBrewDeductions(fills) {
+  if (!fills || !fills.length) return;
+  try {
+    const rows = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beerInventory,tanks)', { headers: SB_HDR })
+      .then(r=>r.json());
+    let inv   = JSON.parse(JSON.stringify(rows.find(r=>r.key==='beerInventory')?.value || []));
+    let tanks = JSON.parse(JSON.stringify(rows.find(r=>r.key==='tanks')?.value || []));
+
+    fills.forEach(f => {
+      if (f.source === 'coldroom') {
+        const invItem = inv.find(x=>x.beer===f.beer);
+        if (invItem && invItem.batches) {
+          const b = invItem.batches.find(b=>b.batchNo===String(f.batch));
+          if (b) {
+            // Deduct from 50L first then 20L
+            let remaining = f.litres;
+            const kegs50 = Math.min(b.kegs50||0, Math.floor(remaining/50));
+            remaining -= kegs50*50;
+            b.kegs50 = (b.kegs50||0) - kegs50;
+            const kegs20 = Math.min(b.kegs20||0, Math.ceil(remaining/20));
+            b.kegs20 = (b.kegs20||0) - kegs20;
+            b.litres = Math.max(0, (b.litres||0) - f.litres);
+          }
+        }
+      } else if (f.source === 'tank' && f.tankId) {
+        const tank = tanks.find(t=>String(t.id)===String(f.tankId));
+        if (tank) tank.vol = Math.max(0,(tank.vol||0)-f.litres);
+      }
+    });
+
+    await fetch(SB_URL + '/rest/v1/brew_state', {
+      method: 'POST',
+      headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([
+        { key:'beerInventory', value:inv,   updated_at:new Date().toISOString() },
+        { key:'tanks',         value:tanks, updated_at:new Date().toISOString() }
+      ])
+    });
+    console.log('Brew deductions pushed:', fills);
+  } catch(e) {
+    console.error('pushBrewDeductions error:', e);
+  }
 }
 
 function toggleOrderExpand(id) {
