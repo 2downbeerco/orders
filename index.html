@@ -4824,17 +4824,20 @@ async function pushBrewDeductions(fills) {
     // Remove inv entries with no remaining batches
     inv = inv.filter(x => x.batches && x.batches.length > 0);
 
-    // Also mark exhausted batches as inactive in __brewery_beers__
+    // Mark exhausted batches inactive in __brewery_beers__
     try {
       const kegsRes = await fetch(SB_URL + '/rest/v1/kegs?select=id,data&id=eq.__brewery_beers__', { headers: SB_HDR });
       const kegsRows = await kegsRes.json();
       const current = kegsRows[0]?.data?.breweryBeers || [];
       const updated = current.map(bb => {
-        const invItem = inv.find(x=>x.beer===bb.beer);
-        const batch = invItem?.batches?.find(b=>String(b.batchNo)===String(bb.batch));
-        // If it was a coldroom batch and is now gone from inv, mark inactive
-        if (bb.source==='coldroom' && !batch && !bb.inactive) {
-          return { ...bb, inactive: true, litres: 0 };
+        if (bb.inactive) return bb;
+        if (bb.source === 'coldroom') {
+          const invItem = inv.find(x=>x.beer===bb.beer);
+          const batch = invItem?.batches?.find(b=>String(b.batchNo)===String(bb.batch));
+          if (!batch) return { ...bb, inactive: true, litres: 0 };
+        } else if (bb.source === 'tank' && bb.tankId) {
+          const tank = tanks.find(t=>String(t.id)===String(bb.tankId));
+          if (tank && (tank.vol||0) <= 0) return { ...bb, inactive: true, litres: 0 };
         }
         return bb;
       });
