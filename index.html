@@ -3628,12 +3628,6 @@ function pageFieldOps() {
         </div>
       </div>
       <div class="card" style="margin-bottom:14px">
-        <div class="section-title" style="margin-bottom:4px">Beer Pricing at ${bar.barName}</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Add a row for each beer and glass size available</div>
-        <div id="fo-pricing-rows"></div>
-        <button type="button" onclick="addFoPricingRow()" style="font-size:12px;color:var(--accent);background:none;border:1px dashed var(--accent);border-radius:6px;cursor:pointer;padding:5px 12px;margin-top:4px">+ Add Beer</button>
-      </div>
-      <div class="card" style="margin-bottom:14px">
         <div class="section-title" style="margin-bottom:10px">Additional Observations</div>
         <textarea id="fo-obs" class="inp" style="width:100%;height:80px;resize:vertical" placeholder="Any other observations from the visit…"></textarea>
       </div>
@@ -3903,27 +3897,6 @@ function showFieldOpsReport(id) {
       <div style="font-size:13px;margin-top:3px">${v}</div>
     </div>`).join('');
 
-  const pricingHtml = r.beerPricing && r.beerPricing.length ? (() => {
-    const byBeer = {};
-    r.beerPricing.forEach(p => { (byBeer[p.beer] = byBeer[p.beer]||[]).push(p); });
-    const rows = Object.entries(byBeer).map(([code, entries]) => {
-      const beerName = entries[0].beerName || code;
-      const sizePrices = entries.map(p =>
-        '<span style="display:inline-block;margin-right:10px;font-size:13px">' +
-          p.glassSize + 'ml — <strong>₹' + p.price + '</strong>' +
-        '</span>'
-      ).join('');
-      return '<div style="padding:8px 0;border-bottom:1px solid var(--hover)">' +
-        '<div style="font-weight:600;font-size:13px;margin-bottom:3px">' + beerName + ' <span style="font-size:11px;color:var(--muted)">(' + code + ')</span></div>' +
-        '<div>' + sizePrices + '</div>' +
-      '</div>';
-    }).join('');
-    return '<div style="padding:10px 0;border-bottom:1px solid var(--hover)">' +
-      '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Beer Pricing</div>' +
-      rows +
-    '</div>';
-  })() : '';
-
   document.getElementById('modal-container').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal-box" style="max-width:480px">
@@ -3935,7 +3908,7 @@ function showFieldOpsReport(id) {
           </div>
           <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
         </div>
-        <div style="max-height:500px;overflow-y:auto">${pricingHtml}${fields||'<div class="empty">No details recorded</div>'}</div>
+        <div style="max-height:500px;overflow-y:auto">${fields||'<div class="empty">No details recorded</div>'}</div>
         <div style="margin-top:14px;display:flex;justify-content:space-between">
           <button onclick="if(confirm('Delete this report?')){fieldOpsReports=fieldOpsReports.filter(x=>x.id!=='${r.id}');saveFieldOpsReports();closeModal();renderPage();}" class="btn btn-danger btn-sm">Delete</button>
           <div style="display:flex;gap:8px">
@@ -3976,54 +3949,13 @@ function editFieldOpsReport(id) {
     if (r.trainingDate && document.getElementById('fo-training-date')) {
       document.getElementById('fo-training-date').value = r.trainingDate;
     }
-    // Pre-fill beer pricing
-    if (r.beerPricing && r.beerPricing.length) {
-      r.beerPricing.forEach(p => addFoPricingRow(p.beer, p.glassSize, p.price));
-    }
   }, 50);
-}
-
-function addFoPricingRow(prefillBeer, prefillSize, prefillPrice) {
-  const container = document.getElementById('fo-pricing-rows');
-  if (!container) return;
-  const beerOptions = BEERS.filter(b=>!b.inactive).map(b =>
-    '<option value="' + b.code + '"' + (prefillBeer === b.code ? ' selected' : '') + '>' + b.name + ' (' + b.code + ')</option>'
-  ).join('');
-  const row = document.createElement('div');
-  row.className = 'fo-price-row';
-  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap';
-  row.innerHTML =
-    '<select class="inp fo-price-beer" style="width:140px;padding:5px 6px;font-size:12px">' +
-      '<option value="">— Beer —</option>' + beerOptions +
-    '</select>' +
-    '<select class="inp fo-price-size" style="width:75px;padding:5px 6px;font-size:12px">' +
-      '<option value="250"' + (prefillSize==250?' selected':'') + '>250ml</option>' +
-      '<option value="330"' + (!prefillSize||prefillSize==330?' selected':'') + '>330ml</option>' +
-      '<option value="500"' + (prefillSize==500?' selected':'') + '>500ml</option>' +
-    '</select>' +
-    '<span style="font-size:13px;color:var(--muted)">₹</span>' +
-    '<input type="number" class="inp fo-price-val" placeholder="Price" min="0" value="' + (prefillPrice||'') + '" style="width:75px;padding:5px 8px;font-size:12px">' +
-    '<button type="button" onclick="this.closest(\'.fo-price-row\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 2px;line-height:1">×</button>';
-  container.appendChild(row);
 }
 
 function submitFieldOps(barName, totalKegs) {
   const checked = [...document.querySelectorAll('.fo-keg-cb:checked')].map(cb=>cb.dataset.keg);
   const unchecked = [...document.querySelectorAll('.fo-keg-cb:not(:checked)')].map(cb=>cb.dataset.keg);
   const visitDateVal = document.getElementById('fo-visit-date')?.value || new Date().toISOString().slice(0,10);
-
-  // Collect beer pricing — one row per beer+size combo
-  const beerPricing = [];
-  document.querySelectorAll('#fo-pricing-rows .fo-price-row').forEach(row => {
-    const code = row.querySelector('.fo-price-beer')?.value;
-    const size = row.querySelector('.fo-price-size')?.value;
-    const price = row.querySelector('.fo-price-val')?.value?.trim();
-    if (code && price) {
-      const beer = BEERS.find(b=>b.code===code);
-      beerPricing.push({ beer: code, beerName: beer?.name||code, glassSize: Number(size)||330, price: Number(price) });
-    }
-  });
-
   const report = {
     id: editingFieldOpsId || uid(),
     timestamp: editingFieldOpsId ? (fieldOpsReports.find(x=>x.id===editingFieldOpsId)?.timestamp || new Date().toISOString()) : new Date().toISOString(),
@@ -4039,7 +3971,6 @@ function submitFieldOps(barName, totalKegs) {
     menu: document.getElementById('fo-menu')?.value?.trim()||'',
     merch: document.getElementById('fo-merch')?.value?.trim()||'',
     obs: document.getElementById('fo-obs')?.value?.trim()||'',
-    beerPricing,
   };
   if (editingFieldOpsId) {
     const idx = fieldOpsReports.findIndex(x=>x.id===editingFieldOpsId);
@@ -4873,7 +4804,6 @@ async function pushBrewDeductions(fills) {
         if (invItem && invItem.batches) {
           const b = invItem.batches.find(b=>b.batchNo===String(f.batch));
           if (b) {
-            // Deduct from 50L first then 20L
             let remaining = f.litres;
             const kegs50 = Math.min(b.kegs50||0, Math.floor(remaining/50));
             remaining -= kegs50*50;
@@ -4882,12 +4812,38 @@ async function pushBrewDeductions(fills) {
             b.kegs20 = (b.kegs20||0) - kegs20;
             b.litres = Math.max(0, (b.litres||0) - f.litres);
           }
+          // Remove batches that have been fully dispatched
+          invItem.batches = invItem.batches.filter(b => b.litres > 0);
         }
       } else if (f.source === 'tank' && f.tankId) {
         const tank = tanks.find(t=>String(t.id)===String(f.tankId));
         if (tank) tank.vol = Math.max(0,(tank.vol||0)-f.litres);
       }
     });
+
+    // Remove inv entries with no remaining batches
+    inv = inv.filter(x => x.batches && x.batches.length > 0);
+
+    // Also mark exhausted batches as inactive in __brewery_beers__
+    try {
+      const kegsRes = await fetch(SB_URL + '/rest/v1/kegs?select=id,data&id=eq.__brewery_beers__', { headers: SB_HDR });
+      const kegsRows = await kegsRes.json();
+      const current = kegsRows[0]?.data?.breweryBeers || [];
+      const updated = current.map(bb => {
+        const invItem = inv.find(x=>x.beer===bb.beer);
+        const batch = invItem?.batches?.find(b=>String(b.batchNo)===String(bb.batch));
+        // If it was a coldroom batch and is now gone from inv, mark inactive
+        if (bb.source==='coldroom' && !batch && !bb.inactive) {
+          return { ...bb, inactive: true, litres: 0 };
+        }
+        return bb;
+      });
+      await fetch(SB_URL + '/rest/v1/kegs', {
+        method: 'POST',
+        headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ id: '__brewery_beers__', data: { breweryBeers: updated }, updated_at: new Date().toISOString() })
+      });
+    } catch(e) { console.warn('breweryBeers inactive update error:', e); }
 
     await fetch(SB_URL + '/rest/v1/brew_state', {
       method: 'POST',
