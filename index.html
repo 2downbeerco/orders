@@ -5385,27 +5385,12 @@ function unassignKeg(orderId, kegNo) {
   const o = orders.find(x=>x.id===orderId);
   const k = kegs.find(x=>x.kegNo===kegNo);
   if (!o) return;
-  const assigned = (o.assignedKegs||[]).find(a=>a.kegNo===kegNo);
-
-  // Restore litres from fills array if present, else single batch fallback
-  if (assigned) {
-    const fills = assigned.fills && assigned.fills.length > 0
-      ? assigned.fills
-      : (assigned.batch ? [{ beer: assigned.beer, batch: assigned.batch, litres: assigned.kegSize || k?.size || 0 }] : []);
-    fills.forEach(f => {
-      if (f.batch) {
-        const be = breweryBeers.find(x => x.beer === f.beer && x.batch === f.batch);
-        if (be) be.litres = (Number(be.litres)||0) + f.litres;
-      }
-    });
-    if (fills.length > 0) saveBreweryBeers();
-  }
 
   o.assignedKegs = (o.assignedKegs||[]).filter(a=>a.kegNo!==kegNo);
   if (k) {
-    const seed = KEG_SEED.find(x=>x.kegNo===kegNo);
-    k.location = seed ? seed.location : 'Brewery';
-    k.beer = seed ? seed.beer : 'Empty';
+    // Always return to Brewery — never restore the seed location
+    k.location = 'Brewery';
+    k.beer = 'Empty';
   }
   // Remove this keg's dispatch history for this order
   if (kegHistory[kegNo]) {
