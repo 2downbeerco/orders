@@ -4341,13 +4341,13 @@ function pageDashboard() {
       </div>
       ${toggleBtns}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:22px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px">
       ${[
         [`${shortMonth} Orders`,  monthOrders.filter(hasKegs).length, '#F5C842'],
         ['Kegs Shipped',          monthKegs,          '#E87C3E'],
         ['Litres Shipped',        monthOrders.reduce((s,o)=>s+countLitres(o),0)+'L', '#A3C96B'],
         ['Delivery Weeks',        (() => { let count=0, d=new Date(mStart); while(d<mEnd){ if(d.getDay()===4) count++; d.setDate(d.getDate()+1); } return count; })(), '#58A6FF'],
-        ['Avg Litres / Order',    monthOrders.length?Math.round(monthOrders.reduce((s,o)=>s+countLitres(o),0)/monthOrders.length)+'L':'-', '#E87C3E'],
+        ['Avg L / Order',      monthOrders.length?Math.round(monthOrders.reduce((s,o)=>s+countLitres(o),0)/monthOrders.length)+'L':'-', '#E87C3E'],
       ].map(([l,v,c])=>`<div class="stat-card"><div class="stat-num" style="color:${c}">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')}
     </div>
     <div class="grid2">
