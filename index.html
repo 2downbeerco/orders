@@ -4769,24 +4769,6 @@ function updateFillSourceOpts(pKey) {
   }
 }
 
-function updateFillSourceOpts(pKey) {
-  const sourceSel = document.getElementById(`psource-${pKey}`);
-  const tankWrap  = document.getElementById(`ptank-wrap-${pKey}`);
-  const tankSel   = document.getElementById(`ptank-${pKey}`);
-  const beerSel   = document.getElementById(`pbeer-${pKey}`);
-  if (!sourceSel || !tankWrap || !tankSel) return;
-  const isTank = sourceSel.value === 'tank';
-  tankWrap.style.display = isTank ? 'block' : 'none';
-  if (isTank && beerSel && beerSel.value) {
-    const [beerCode] = beerSel.value.split('|');
-    const tanks = (brewStateTanks||[]).filter(t=>
-      t.beer===beerCode && t.stage==='Ready'
-    );
-    tankSel.innerHTML = '<option value="">Select tank…</option>' +
-      tanks.map(t=>`<option value="${t.id}">${t.name} — ${t.vol||0}L (${t.stage})</option>`).join('');
-  }
-}
-
 function addPendingFill(pKey) {
   const beerSel = document.getElementById(`pbeer-${pKey}`);
   const litresInp = document.getElementById(`plitres-${pKey}`);
@@ -4871,79 +4853,10 @@ function commitKegAssign(orderId, pKey) {
   // Push stock deductions to brew ops
   pushBrewDeductions(pending.fills);
 
-  // Push stock deductions to brew ops
-  pushBrewDeductions(pending.fills);
-
   delete pendingKegFills[pKey];
   saveOrders();
   saveKegs();
   renderPage();
-}
-
-async function pushBrewDeductions(fills) {
-  if (!fills || !fills.length) return;
-  try {
-    const rows = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beerInventory,tanks)', { headers: SB_HDR })
-      .then(r=>r.json());
-    let inv   = JSON.parse(JSON.stringify(rows.find(r=>r.key==='beerInventory')?.value || []));
-    let tanks = JSON.parse(JSON.stringify(rows.find(r=>r.key==='tanks')?.value || []));
-
-    fills.forEach(f => {
-      if (f.source === 'coldroom') {
-        const invItem = inv.find(x=>x.beer===f.beer);
-        if (invItem && invItem.batches) {
-          const b = invItem.batches.find(b=>b.batchNo===String(f.batch));
-          if (b) {
-            b.litres = Math.max(0, (b.litres||0) - f.litres);
-          }
-          // Remove batches that have been fully dispatched
-          invItem.batches = invItem.batches.filter(b => b.litres > 0);
-        }
-      } else if (f.source === 'tank' && f.tankId) {
-        const tank = tanks.find(t=>String(t.id)===String(f.tankId));
-        if (tank) tank.vol = Math.max(0,(tank.vol||0)-f.litres);
-      }
-    });
-
-    // Remove inv entries with no remaining batches
-    inv = inv.filter(x => x.batches && x.batches.length > 0);
-
-    // Mark exhausted batches inactive in __brewery_beers__
-    try {
-      const kegsRes = await fetch(SB_URL + '/rest/v1/kegs?select=id,data&id=eq.__brewery_beers__', { headers: SB_HDR });
-      const kegsRows = await kegsRes.json();
-      const current = kegsRows[0]?.data?.breweryBeers || [];
-      const updated = current.map(bb => {
-        if (bb.inactive) return bb;
-        if (bb.source === 'coldroom') {
-          const invItem = inv.find(x=>x.beer===bb.beer);
-          const batch = invItem?.batches?.find(b=>String(b.batchNo)===String(bb.batch));
-          if (!batch) return { ...bb, inactive: true, litres: 0 };
-        } else if (bb.source === 'tank' && bb.tankId) {
-          const tank = tanks.find(t=>String(t.id)===String(bb.tankId));
-          if (tank && (tank.vol||0) <= 0) return { ...bb, inactive: true, litres: 0 };
-        }
-        return bb;
-      });
-      await fetch(SB_URL + '/rest/v1/kegs', {
-        method: 'POST',
-        headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ id: '__brewery_beers__', data: { breweryBeers: updated }, updated_at: new Date().toISOString() })
-      });
-    } catch(e) { console.warn('breweryBeers inactive update error:', e); }
-
-    await fetch(SB_URL + '/rest/v1/brew_state', {
-      method: 'POST',
-      headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify([
-        { key:'beerInventory', value:inv,   updated_at:new Date().toISOString() },
-        { key:'tanks',         value:tanks, updated_at:new Date().toISOString() }
-      ])
-    });
-    console.log('Brew deductions pushed:', fills);
-  } catch(e) {
-    console.error('pushBrewDeductions error:', e);
-  }
 }
 
 async function pushBrewDeductions(fills) {
