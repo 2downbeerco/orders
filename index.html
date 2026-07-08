@@ -2714,14 +2714,12 @@ async function syncBrewBeers() {
     if (beerRow && Array.isArray(beerRow.value) && JSON.stringify(beerRow.value) !== JSON.stringify(brewStateBeers)) {
       brewStateBeers = beerRow.value;
       localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
-      // Merge into state.beers so new beers appear automatically
-      if (state && state.beers) {
-        brewStateBeers.forEach(b => {
-          const idx = state.beers.findIndex(x=>x.code===b.code);
-          if (idx>=0) state.beers[idx] = {...state.beers[idx], ...b};
-          else state.beers.push(b);
-        });
-      }
+      // Merge into BEERS so new beers appear
+      brewStateBeers.forEach(b => {
+        const idx = BEERS.findIndex(x=>x.code===b.code);
+        if (idx>=0) BEERS[idx] = {...BEERS[idx], ...b};
+        else BEERS.push(b);
+      });
       setSyncStatus('Updated ↓', '#16A34A');
       setTimeout(() => setSyncStatus('', ''), 2000);
       try { renderPage(); } catch(e) {}
@@ -2917,7 +2915,15 @@ async function loadData() {
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
   try { const fo = localStorage.getItem('2down_fieldops_reports'); if (fo) fieldOpsReports = JSON.parse(fo); } catch(_){}
   try { const fn = localStorage.getItem('2down_fieldops_newbar'); if (fn) fieldOpsNewBarReports = JSON.parse(fn); } catch(_){}
-  try { const bsb = localStorage.getItem('2down_brew_state_beers'); if (bsb) brewStateBeers = JSON.parse(bsb); } catch(_){}
+  try { const bsb = localStorage.getItem('2down_brew_state_beers'); if (bsb) {
+    brewStateBeers = JSON.parse(bsb);
+    // Merge into BEERS so new beers (e.g. SF) appear before Supabase loads
+    brewStateBeers.forEach(b => {
+      const idx = BEERS.findIndex(x=>x.code===b.code);
+      if (idx>=0) BEERS[idx] = {...BEERS[idx], ...b};
+      else BEERS.push(b);
+    });
+  }} catch(_){}
 
   // Render immediately from localStorage
   renderNav();
@@ -2998,11 +3004,11 @@ async function loadData() {
         if (beerRow && Array.isArray(beerRow.value)) {
           brewStateBeers = beerRow.value;
           localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
-          // Merge into state.beers so new beers appear automatically
+          // Merge into BEERS so new beers appear
           brewStateBeers.forEach(b => {
-            const idx = state.beers.findIndex(x=>x.code===b.code);
-            if (idx>=0) state.beers[idx] = {...state.beers[idx], ...b};
-            else state.beers.push(b);
+            const idx = BEERS.findIndex(x=>x.code===b.code);
+            if (idx>=0) BEERS[idx] = {...BEERS[idx], ...b};
+            else BEERS.push(b);
           });
         }
         if (tankRow && Array.isArray(tankRow.value)) {
