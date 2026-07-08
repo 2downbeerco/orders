@@ -2714,6 +2714,14 @@ async function syncBrewBeers() {
     if (beerRow && Array.isArray(beerRow.value) && JSON.stringify(beerRow.value) !== JSON.stringify(brewStateBeers)) {
       brewStateBeers = beerRow.value;
       localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
+      // Merge into state.beers so new beers appear automatically
+      if (state && state.beers) {
+        brewStateBeers.forEach(b => {
+          const idx = state.beers.findIndex(x=>x.code===b.code);
+          if (idx>=0) state.beers[idx] = {...state.beers[idx], ...b};
+          else state.beers.push(b);
+        });
+      }
       setSyncStatus('Updated ↓', '#16A34A');
       setTimeout(() => setSyncStatus('', ''), 2000);
       try { renderPage(); } catch(e) {}
@@ -2990,6 +2998,12 @@ async function loadData() {
         if (beerRow && Array.isArray(beerRow.value)) {
           brewStateBeers = beerRow.value;
           localStorage.setItem('2down_brew_state_beers', JSON.stringify(brewStateBeers));
+          // Merge into state.beers so new beers appear automatically
+          brewStateBeers.forEach(b => {
+            const idx = state.beers.findIndex(x=>x.code===b.code);
+            if (idx>=0) state.beers[idx] = {...state.beers[idx], ...b};
+            else state.beers.push(b);
+          });
         }
         if (tankRow && Array.isArray(tankRow.value)) {
           brewStateTanks = tankRow.value;
