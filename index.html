@@ -5148,12 +5148,11 @@ async function deleteOrder(id) {
       // Note: batch litres are NOT added back here — remaining is computed dynamically.
       inventoryChanged = true;
     });
-    // Return keg to its original location from KEG_SEED
+    // Always return keg to Brewery — never restore seed location
     const k = kegs.find(x=>x.kegNo===a.kegNo);
     if (k) {
-      const seed = KEG_SEED.find(x=>x.kegNo===a.kegNo);
-      k.location = seed ? seed.location : 'Brewery';
-      k.beer = seed ? seed.beer : 'Empty';
+      k.location = 'Brewery';
+      k.beer = 'Empty';
     }
     // Remove keg history entries for this order
     if (kegHistory[a.kegNo]) {
