@@ -4929,29 +4929,8 @@ async function pushBrewDeductions(fills) {
     // Remove inv entries with no remaining batches
     inv = inv.filter(x => x.batches && x.batches.length > 0);
 
-    // Mark exhausted batches inactive in __brewery_beers__
-    try {
-      const kegsRes = await fetch(SB_URL + '/rest/v1/kegs?select=id,data&id=eq.__brewery_beers__', { headers: SB_HDR });
-      const kegsRows = await kegsRes.json();
-      const current = kegsRows[0]?.data?.breweryBeers || [];
-      const updated = current.map(bb => {
-        if (bb.inactive) return bb;
-        if (bb.source === 'coldroom') {
-          const invItem = inv.find(x=>x.beer===bb.beer);
-          const batch = invItem?.batches?.find(b=>String(b.batchNo)===String(bb.batch));
-          if (!batch) return { ...bb, inactive: true, litres: 0 };
-        } else if (bb.source === 'tank' && bb.tankId) {
-          const tank = tanks.find(t=>String(t.id)===String(bb.tankId));
-          if (tank && (tank.vol||0) <= 0) return { ...bb, inactive: true, litres: 0 };
-        }
-        return bb;
-      });
-      await fetch(SB_URL + '/rest/v1/kegs', {
-        method: 'POST',
-        headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ id: '__brewery_beers__', data: { breweryBeers: updated }, updated_at: new Date().toISOString() })
-      });
-    } catch(e) { console.warn('breweryBeers inactive update error:', e); }
+    // Note: batch active/inactive state is managed by the brew dashboard and pushed
+    // via pushBreweryBeersToKegs — do not auto-deactivate here as it conflicts.
 
     await fetch(SB_URL + '/rest/v1/brew_state', {
       method: 'POST',
