@@ -4478,21 +4478,22 @@ function pageOrders() {
       // Only show beers that are in this order's items
       const orderBeerCodes = new Set((o.items||[]).map(i=>i.beer));
       const beerOpts = (() => {
+        // Show all active batches regardless of litres (Beer Stock computes remaining dynamically)
         const activeBatches = breweryBeers.filter(bb =>
           activeBeerCodes.has(bb.beer) &&
-          orderBeerCodes.has(bb.beer) &&
-          !bb.inactive &&
-          Number(bb.litres) > 0
+          !bb.inactive
         );
         if (activeBatches.length > 0) {
           return activeBatches.map(bb => {
             const beerInfo = BEERS.find(x=>x.code===bb.beer);
-            return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch}, ${bb.litres}L)</option>`;
+            const litresLabel = Number(bb.litres) > 0 ? `, ${bb.litres}L` : '';
+            return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch}${litresLabel})</option>`;
           }).join('');
         }
+        // Fallback — no breweryBeers synced yet
         return [...orderBeerCodes].filter(c=>activeBeerCodes.has(c)).map(c=>{
           const b = BEERS.find(x=>x.code===c);
-          return `<option value="${c}|">${c} – ${b?.name||c}</option>`;
+          return `<option value="${c}|">${c} – ${b?.name||c} (no batch data)</option>`;
         }).join('');
       })();
 
