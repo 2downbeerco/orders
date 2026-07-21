@@ -4946,50 +4946,6 @@ async function pushBrewDeductions(fills) {
   }
 }
 
-async function pushBrewDeductions(fills) {
-  if (!fills || !fills.length) return;
-  try {
-    const rows = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beerInventory,tanks)', { headers: SB_HDR })
-      .then(r=>r.json());
-    let inv   = JSON.parse(JSON.stringify(rows.find(r=>r.key==='beerInventory')?.value || []));
-    let tanks = JSON.parse(JSON.stringify(rows.find(r=>r.key==='tanks')?.value || []));
-
-    fills.forEach(f => {
-      if (f.source === 'coldroom') {
-        const invItem = inv.find(x=>x.beer===f.beer);
-        if (invItem && invItem.batches) {
-          const b = invItem.batches.find(b=>b.batchNo===String(f.batch));
-          if (b) {
-            // Deduct from 50L first then 20L
-            let remaining = f.litres;
-            const kegs50 = Math.min(b.kegs50||0, Math.floor(remaining/50));
-            remaining -= kegs50*50;
-            b.kegs50 = (b.kegs50||0) - kegs50;
-            const kegs20 = Math.min(b.kegs20||0, Math.ceil(remaining/20));
-            b.kegs20 = (b.kegs20||0) - kegs20;
-            b.litres = Math.max(0, (b.litres||0) - f.litres);
-          }
-        }
-      } else if (f.source === 'tank' && f.tankId) {
-        const tank = tanks.find(t=>String(t.id)===String(f.tankId));
-        if (tank) tank.vol = Math.max(0,(tank.vol||0)-f.litres);
-      }
-    });
-
-    await fetch(SB_URL + '/rest/v1/brew_state', {
-      method: 'POST',
-      headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify([
-        { key:'beerInventory', value:inv,   updated_at:new Date().toISOString() },
-        { key:'tanks',         value:tanks, updated_at:new Date().toISOString() }
-      ])
-    });
-    console.log('Brew deductions pushed:', fills);
-  } catch(e) {
-    console.error('pushBrewDeductions error:', e);
-  }
-}
-
 function toggleOrderExpand(id) {
   expandedOrderId = expandedOrderId === id ? null : id;
   _renderPage();
