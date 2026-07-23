@@ -4568,8 +4568,8 @@ function pageOrders() {
               </select>
             </div>
             <div>
-              <label class="lbl">Litres</label>
-              <input id="plitres-${pKey}" type="number" min="1" max="${size}" class="inp" style="width:80px;font-size:13px" value="${size-totalFilled}" placeholder="${size-totalFilled}">
+              <label class="lbl">Litres <span style="font-weight:400;color:var(--muted);font-size:10px">(edit for partial)</span></label>
+              <input id="plitres-${pKey}" type="number" min="1" class="inp" style="width:80px;font-size:13px" value="${size-totalFilled}" placeholder="${size-totalFilled}">
             </div>
             <button class="btn btn-ghost btn-sm" onclick="addPendingFill('${pKey}')">+ Add Fill</button>
           </div>
