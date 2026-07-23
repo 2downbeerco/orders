@@ -4850,10 +4850,10 @@ function commitKegAssign(orderId, pKey) {
   if (!o || !k) return;
   if (!o.assignedKegs) o.assignedKegs = [];
 
-  // Validate total fills equal keg size
+  // Validate at least some fill has been added
   const totalFilled = pending.fills.reduce((s,f)=>s+f.litres,0);
-  if (totalFilled !== k.size) {
-    alert(`Total fills (${totalFilled}L) must equal the keg size (${k.size}L). Please adjust your fills.`);
+  if (totalFilled <= 0) {
+    alert('Please add at least one fill before assigning.');
     return;
   }
 
