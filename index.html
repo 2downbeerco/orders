@@ -4204,7 +4204,8 @@ function pageDashboard() {
     if (!o) return 0;
     if (o.source === 'historical') return (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.actualVol||i.size)||0),0);
     if (!(o.assignedKegs||[]).length) return 0;
-    return (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.size)||0),0);
+    // Sum actual fill litres from assignedKegs (supports partial fills)
+    return (o.assignedKegs||[]).reduce((s,ak)=>s+(ak.fills||[]).reduce((s2,f)=>s2+(Number(f.litres)||0),0),0);
   };
   const hasKegs = (o) => o && (o.source === 'historical' || (o.assignedKegs||[]).length > 0);
 
