@@ -4914,16 +4914,21 @@ async function pushBrewDeductions(fills) {
       if (f.source === 'coldroom') {
         const invItem = inv.find(x=>x.beer===f.beer);
         if (invItem && invItem.batches) {
-          const b = invItem.batches.find(b=>b.batchNo===String(f.batch));
+          const b = invItem.batches.find(b=>String(b.batchNo).replace(/^0+/,'')===String(f.batch).replace(/^0+/,''));
           if (b) {
             b.litres = Math.max(0, (b.litres||0) - f.litres);
+          } else {
+            console.warn('pushBrewDeductions: batch not found for deduction', f.beer, f.batch, invItem.batches.map(b=>b.batchNo));
           }
           // Remove batches that have been fully dispatched
           invItem.batches = invItem.batches.filter(b => b.litres > 0);
+        } else {
+          console.warn('pushBrewDeductions: no coldroom inv item found for beer', f.beer);
         }
       } else if (f.source === 'tank' && f.tankId) {
         const tank = tanks.find(t=>String(t.id)===String(f.tankId));
         if (tank) tank.vol = Math.max(0,(tank.vol||0)-f.litres);
+        else console.warn('pushBrewDeductions: tank not found', f.tankId);
       }
     });
 
