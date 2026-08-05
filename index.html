@@ -3081,6 +3081,58 @@ async function saveKegs() {
   }
 }
 
+function openAddKegModal() {
+  document.getElementById('ak-kegno').value = '';
+  document.getElementById('ak-size').value = '50';
+  document.getElementById('ak-make').value = '';
+  document.getElementById('ak-location').innerHTML = '<option value="Brewery" selected>Brewery</option>' +
+    bars.filter(b=>b&&b.id&&!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName)).map(b=>`<option value="${b.barName}">${b.barName}</option>`).join('');
+  document.getElementById('add-keg-modal').style.display = 'flex';
+}
+function closeAddKegModal() { document.getElementById('add-keg-modal').style.display = 'none'; }
+
+function saveNewKeg() {
+  const kegNo = document.getElementById('ak-kegno').value.trim();
+  const size = +document.getElementById('ak-size').value;
+  const make = document.getElementById('ak-make').value.trim();
+  const location = document.getElementById('ak-location').value;
+  if (!kegNo) { alert('Keg number is required.'); return; }
+  if (kegs.find(k=>k.kegNo===kegNo)) { alert('A keg with this number already exists.'); return; }
+  kegs.push({ kegNo, size, make: make||'—', location, beer: 'Empty', missing: false });
+  closeAddKegModal();
+  saveKegs();
+  renderPage();
+  showToast();
+}
+
+let _pendingDeleteKegNo = null;
+function openDeleteKegModal(kegNo) {
+  const k = kegs.find(x=>x.kegNo===kegNo);
+  if (!k) return;
+  _pendingDeleteKegNo = kegNo;
+  document.getElementById('delete-keg-info').innerHTML =
+    `<strong>${kegNo}</strong> — ${k.size}L ${k.make}<br>Currently at: ${k.location}${k.beer&&k.beer!=='Empty'?' · Contains: '+k.beer:''}`;
+  document.getElementById('dk-reason').value = 'scrapped';
+  document.getElementById('delete-keg-modal').style.display = 'flex';
+}
+function closeDeleteKegModal() { document.getElementById('delete-keg-modal').style.display = 'none'; _pendingDeleteKegNo = null; }
+
+async function confirmDeleteKeg() {
+  if (!_pendingDeleteKegNo) return;
+  const kegNo = _pendingDeleteKegNo;
+  const reason = document.getElementById('dk-reason').value;
+  kegs = kegs.filter(k => k.kegNo !== kegNo);
+  localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+  try {
+    await sbDelete('kegs', kegNo);
+  } catch(e) {
+    console.error('Failed to delete keg from Supabase:', e);
+  }
+  closeDeleteKegModal();
+  renderPage();
+  showToast();
+}
+
 function showToast() {
   const t = document.getElementById('toast');
   t.classList.add('show');
@@ -5495,6 +5547,7 @@ function pageKegs() {
             <button class="btn btn-sm ${k.missing?'btn-ghost':'btn-danger'}" onclick="toggleMissing('${k.kegNo}')" style="${k.missing?'color:var(--green);border-color:var(--green)':''}">
               ${k.missing ? 'Found' : 'Missing'}
             </button>
+            <button class="btn btn-ghost btn-sm" onclick="openDeleteKegModal('${k.kegNo}')" style="color:var(--red);">🗑 Remove</button>
             <button class="btn btn-ghost btn-sm" onclick="editingKegNo=null;renderPage()">Done</button>
           </div>
         </td>
@@ -5598,8 +5651,54 @@ function pageKegs() {
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <input class="inp" id="kegs-search-inp" placeholder="Search keg no, location, beer…" value="${kegsSearch}" oninput="setKegsSearch(this.value)" style="width:260px">
       ${filterBtns}
-      <button class="btn btn-ghost" onclick="showKegsByBar()" style="margin-left:auto">🏪 Filter by Bar</button>
+      <button class="btn btn-primary" onclick="openAddKegModal()" style="margin-left:auto">+ Add Keg</button>
+      <button class="btn btn-ghost" onclick="showKegsByBar()">🏪 Filter by Bar</button>
       <button class="btn btn-ghost" onclick="showKegsByDate()">📅 Filter by Date</button>
+    </div>
+
+    <!-- Add Keg Modal -->
+    <div id="add-keg-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeAddKegModal()">
+      <div class="modal-box" style="max-width:420px;">
+        <div class="modal-title">Add New Keg</div>
+        <div class="form-group"><label class="lbl">Keg Number</label>
+          <input class="inp" id="ak-kegno" placeholder="e.g. 50C3-15">
+        </div>
+        <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-group"><label class="lbl">Size (L)</label>
+            <select class="inp" id="ak-size"><option value="20">20L</option><option value="50" selected>50L</option></select>
+          </div>
+          <div class="form-group"><label class="lbl">Make</label>
+            <input class="inp" id="ak-make" placeholder="e.g. Steel King">
+          </div>
+        </div>
+        <div class="form-group"><label class="lbl">Location</label>
+          <select class="inp" id="ak-location"><option value="Brewery" selected>Brewery</option></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeAddKegModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveNewKeg()">Add Keg</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Keg Confirm Modal -->
+    <div id="delete-keg-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeDeleteKegModal()">
+      <div class="modal-box" style="max-width:380px;">
+        <div class="modal-title">Remove Keg</div>
+        <div id="delete-keg-info" style="font-size:14px;color:var(--muted);margin-bottom:16px;"></div>
+        <div class="form-group"><label class="lbl">Reason</label>
+          <select class="inp" id="dk-reason">
+            <option value="scrapped">Scrapped / Damaged</option>
+            <option value="sold">Sold</option>
+            <option value="given">Given away</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeDeleteKegModal()">Cancel</button>
+          <button class="btn btn-danger" onclick="confirmDeleteKeg()">Remove Keg</button>
+        </div>
+      </div>
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
