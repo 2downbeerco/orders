@@ -6714,7 +6714,7 @@ function pageBeers() {
           ${BEERS.length > 1
             ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}"
                 style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}"
-                onclick="toggleBeerActive(${i})">${isInactiveBeer?'Activate':'Deactivate'}</button>`
+                onclick="toggleBeerActive('${b.code}')">${isInactiveBeer?'Activate':'Deactivate'}</button>`
             : ''}
         </div>
       </td>
@@ -6777,7 +6777,7 @@ function pageBeers() {
                     <td>
                       <div style="display:flex;gap:4px;flex-wrap:wrap">
                         ${!isInactiveBeer ? `<button class="btn btn-ghost btn-sm" onclick="newBatchBeer=newBatchBeer==='${b.code}'?'':'${b.code}';renderPage()">+ Batch</button>` : ''}
-                        ${BEERS.length > 1 ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}" style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}" onclick="toggleBeerActive(${i})">${isInactiveBeer?'Activate':'Deactivate'}</button>` : ''}
+                        ${BEERS.length > 1 ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}" style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}" onclick="toggleBeerActive('${b.code}')">${isInactiveBeer?'Activate':'Deactivate'}</button>` : ''}
                       </div>
                     </td>
                   </tr>`;
@@ -6933,9 +6933,12 @@ function toggleBatchActive(idx) {
   renderPage();
 }
 
-function toggleBeerActive(idx) {
-  if (!BEERS[idx]) return;
-  const beer = BEERS[idx];
+function toggleBeerActive(codeOrIdx) {
+  // Support both code (string) and legacy index (number) for backward compatibility
+  const beer = typeof codeOrIdx === 'string'
+    ? BEERS.find(b => b.code === codeOrIdx)
+    : BEERS[codeOrIdx];
+  if (!beer) return;
   beer.inactive = !beer.inactive;
   // Sync batch inactive state with beer state
   breweryBeers.forEach(bb => {
