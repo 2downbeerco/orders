@@ -6118,7 +6118,13 @@ function renderBarHistoryModal(barId) {
 
   // Delivery rows
   const deliveryRows = monthOrders.map(o => {
-    const items = (o.items||[]).map(i => `<span style="margin-right:10px">${badge(i.beer,beerColor(i.beer))} <span style="font-size:12px">${i.size}L × ${i.qty}</span></span>`).join('');
+    const items = (o.items||[]).map(i => {
+      // Find matching assigned keg(s) for this beer to get batch number(s)
+      const matchingKegs = (o.assignedKegs||[]).filter(ak => ak.beer === i.beer);
+      const batches = [...new Set(matchingKegs.map(ak => ak.batch).filter(Boolean))];
+      const batchLabel = batches.length ? ` <span style="color:var(--muted)">(Batch ${batches.join(', ')})</span>` : '';
+      return `<span style="margin-right:10px">${badge(i.beer,beerColor(i.beer))} <span style="font-size:12px">${i.size}L × ${i.qty}</span>${batchLabel}</span>`;
+    }).join('');
     const totalKegs = (o.items||[]).reduce((s,i)=>s+i.qty,0);
     return `<div style="padding:12px 0;border-bottom:1px solid var(--hover)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
