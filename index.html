@@ -6129,25 +6129,50 @@ function renderBarHistoryModal(barId) {
     </div>`;
   }).join('');
 
-  // Consolidated beer totals
+  // Consolidated beer totals — group by base beer code (strip batch number) + size
   const beerTotals = {};
   monthOrders.forEach(o => {
     (o.items||[]).forEach(i => {
-      const key = i.beer + '_' + i.size;
-      if (!beerTotals[key]) beerTotals[key] = {beer:i.beer, size:i.size, qty:0};
+      const baseCode = i.beer.replace(/[0-9]+$/,'');
+      const key = baseCode + '_' + i.size;
+      if (!beerTotals[key]) beerTotals[key] = {beer:baseCode, size:i.size, qty:0};
       beerTotals[key].qty += i.qty;
     });
   });
   const totalKegsMonth = monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty,s),0);
   const totalLitresMonth = monthOrders.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty*i.size,s),0);
-  const totalRows = Object.values(beerTotals).sort((a,b)=>a.beer.localeCompare(b.beer)).map(t =>
-    `<tr>
-      <td>${badge(t.beer, beerColor(t.beer))} ${BEERS.find(b=>b.code===t.beer)?.name||t.beer}</td>
+
+  // Invoicing totals for the month — reuse same logic as Field Ops invoicing tab
+  let monthMrpTotal = 0, monthSvcTotal = 0;
+  monthOrders.forEach(o => {
+    const rc = rateCard[bar.id]||{};
+    const hist = HISTORICAL_INV_DATA[o.id];
+    const inv = invData[o.id]||{};
+    let mrpFinal, svcFinal;
+    if (hist) {
+      mrpFinal = hist.mrpAmount||0;
+      svcFinal = hist.svcAmount||0;
+    } else {
+      const oLitres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+      const mrpGross = Math.ceil(MRP_PER_LITRE*1.02*oLitres);
+      mrpFinal = mrpGross-(Number(inv.mrpDiscount)||0);
+      let svcGross=0;
+      (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) svcGross+=(Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+      svcFinal = parseFloat((svcGross-(Number(inv.svcDiscount)||0)).toFixed(2));
+    }
+    monthMrpTotal += mrpFinal;
+    monthSvcTotal += svcFinal;
+  });
+  const fmtInv = n => n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const totalRows = Object.values(beerTotals).sort((a,b)=>a.beer.localeCompare(b.beer)).map(t => {
+    const beerObj = BEERS.find(b=>b.code===t.beer);
+    return `<tr>
+      <td>${badge(t.beer, beerColor(t.beer))} ${beerObj?.name||t.beer}</td>
       <td>${t.size}L</td>
       <td style="font-weight:700;color:var(--accent)">${t.qty}</td>
       <td style="color:var(--muted)">${t.qty*t.size}L</td>
-    </tr>`
-  ).join('') + `<tr style="border-top:2px solid var(--border);background:var(--hover)">
+    </tr>`;
+  }).join('') + `<tr style="border-top:2px solid var(--border);background:var(--hover)">
     <td colspan="2" style="font-weight:700">Total</td>
     <td style="font-weight:800;color:var(--accent);font-size:15px">${totalKegsMonth}</td>
     <td style="font-weight:700">${totalLitresMonth}L</td>
@@ -6161,6 +6186,20 @@ function renderBarHistoryModal(barId) {
            <thead><tr><th>Beer</th><th>Size</th><th>Kegs</th><th>Litres</th></tr></thead>
            <tbody>${totalRows}</tbody>
          </table>
+       </div>
+       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px">
+         <div class="card" style="padding:12px;text-align:center">
+           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">MRP Amount</div>
+           <div style="font-size:16px;font-weight:800;color:var(--text)">₹${fmtInv(monthMrpTotal)}</div>
+         </div>
+         <div class="card" style="padding:12px;text-align:center">
+           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Service Amount</div>
+           <div style="font-size:16px;font-weight:800;color:var(--text)">₹${fmtInv(monthSvcTotal)}</div>
+         </div>
+         <div class="card" style="padding:12px;text-align:center;background:var(--accent-bg)">
+           <div style="font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total Invoicing</div>
+           <div style="font-size:16px;font-weight:800;color:var(--accent)">₹${fmtInv(monthMrpTotal+monthSvcTotal)}</div>
+         </div>
        </div>`;
 
   document.getElementById('modal-container').innerHTML = `
