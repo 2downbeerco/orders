@@ -2644,12 +2644,39 @@ async function migrateKegLocationNames() {
   }
 }
 
+function showSyncError(msg) {
+  let banner = document.getElementById('sync-error-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'sync-error-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#DC2626;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;text-align:center;z-index:99999;display:flex;align-items:center;justify-content:center;gap:12px;';
+    document.body.prepend(banner);
+  }
+  banner.innerHTML = `⚠️ ${msg} <button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:4px;padding:2px 10px;cursor:pointer;font-size:12px;">Dismiss</button>`;
+}
+
+// Detects if a modal is currently open (modal-container is populated) or if
+// the user is actively typing/selecting in any input, textarea, or select
+// anywhere on the page. A background sync re-render while either is true
+// would silently wipe unsaved keystrokes or interrupt an open modal.
+function isModalOpen() {
+  const c = document.getElementById('modal-container');
+  return !!(c && c.innerHTML.trim());
+}
+function isEditingField() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
 async function syncAllData() {
   if (_syncLocked > 0) return; // a local write is in-flight — skip this sync round to avoid clobbering it
   try {
     const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([
       sbGet('orders'), sbGet('bars'), sbGet('kegs')
     ]);
+    window._syncFailCount = 0;
     let changed = false;
 
     if (remoteOrders.length > 0) {
@@ -2695,9 +2722,16 @@ async function syncAllData() {
     if (changed) {
       setSyncStatus('Updated ↓', '#16A34A');
       setTimeout(() => setSyncStatus('', ''), 2000);
-      try { renderPage(); } catch(e) {}
+      if (!isModalOpen() && !isEditingField()) {
+        try { renderPage(); } catch(e) {}
+      }
     }
-  } catch(e) { /* silent fail */ }
+  } catch(e) {
+    window._syncFailCount = (window._syncFailCount||0) + 1;
+    if (window._syncFailCount === 3) {
+      showSyncError('Lost connection to the server. Your recent changes may not be saved — check your internet connection.');
+    }
+  }
 }
 
 // Separately poll brew_state every 10s (no realtime on that table)
@@ -2722,7 +2756,9 @@ async function syncBrewBeers() {
       });
       setSyncStatus('Updated ↓', '#16A34A');
       setTimeout(() => setSyncStatus('', ''), 2000);
-      try { renderPage(); } catch(e) {}
+      if (!isModalOpen() && !isEditingField()) {
+        try { renderPage(); } catch(e) {}
+      }
     }
   } catch(e) {}
 }
@@ -4843,24 +4879,6 @@ function updateFillSourceOpts(pKey) {
   }
 }
 
-function updateFillSourceOpts(pKey) {
-  const sourceSel = document.getElementById(`psource-${pKey}`);
-  const tankWrap  = document.getElementById(`ptank-wrap-${pKey}`);
-  const tankSel   = document.getElementById(`ptank-${pKey}`);
-  const beerSel   = document.getElementById(`pbeer-${pKey}`);
-  if (!sourceSel || !tankWrap || !tankSel) return;
-  const isTank = sourceSel.value === 'tank';
-  tankWrap.style.display = isTank ? 'block' : 'none';
-  if (isTank && beerSel && beerSel.value) {
-    const [beerCode] = beerSel.value.split('|');
-    const tanks = (brewStateTanks||[]).filter(t=>
-      t.beer===beerCode && t.stage==='Ready'
-    );
-    tankSel.innerHTML = '<option value="">Select tank…</option>' +
-      tanks.map(t=>`<option value="${t.id}">${t.name} — ${t.vol||0}L (${t.stage})</option>`).join('');
-  }
-}
-
 function addPendingFill(pKey) {
   const beerSel = document.getElementById(`pbeer-${pKey}`);
   const litresInp = document.getElementById(`plitres-${pKey}`);
@@ -4954,8 +4972,19 @@ function commitKegAssign(orderId, pKey) {
   renderPage();
 }
 
+// Serializes writes to brew_state (beerInventory/tanks) triggered by keg
+// assignments. Without this, two keg assignments happening close together
+// (or one finishing while another's read is still in flight) can silently
+// lose one deduction — whichever write lands last wins and discards the
+// other's changes, since this is an unprotected read-modify-write.
+// Note: this only guards against races within this app. Brew ops has its
+// own independent writer to the same brew_state keys (via its own save
+// flow) — a true cross-app race is not fully eliminated by this alone,
+// but same-app races (the far more common case) are.
+let _brewDeductionsQueue = Promise.resolve();
 async function pushBrewDeductions(fills) {
   if (!fills || !fills.length) return;
+  _brewDeductionsQueue = _brewDeductionsQueue.then(async () => {
   try {
     const rows = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beerInventory,tanks)', { headers: SB_HDR })
       .then(r=>r.json());
@@ -4990,7 +5019,7 @@ async function pushBrewDeductions(fills) {
     // Note: batch active/inactive state is managed by the brew dashboard and pushed
     // via pushBreweryBeersToKegs — do not auto-deactivate here as it conflicts.
 
-    await fetch(SB_URL + '/rest/v1/brew_state', {
+    const putRes = await fetch(SB_URL + '/rest/v1/brew_state', {
       method: 'POST',
       headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify([
@@ -4998,10 +5027,13 @@ async function pushBrewDeductions(fills) {
         { key:'tanks',         value:tanks, updated_at:new Date().toISOString() }
       ])
     });
-    console.log('Brew deductions pushed:', fills);
+    if (!putRes.ok) throw new Error('brew_state write failed: ' + putRes.status);
   } catch(e) {
     console.error('pushBrewDeductions error:', e);
+    showSyncError('Failed to sync keg deduction to the brew ops dashboard. Stock there may be out of date.');
   }
+  });
+  return _brewDeductionsQueue;
 }
 
 function toggleOrderExpand(id) {
