@@ -4963,9 +4963,6 @@ function commitKegAssign(orderId, pKey) {
   // Push stock deductions to brew ops
   pushBrewDeductions(pending.fills);
 
-  // Push stock deductions to brew ops
-  pushBrewDeductions(pending.fills);
-
   delete pendingKegFills[pKey];
   saveOrders();
   saveKegs();
@@ -5031,6 +5028,56 @@ async function pushBrewDeductions(fills) {
   } catch(e) {
     console.error('pushBrewDeductions error:', e);
     showSyncError('Failed to sync keg deduction to the brew ops dashboard. Stock there may be out of date.');
+  }
+  });
+  return _brewDeductionsQueue;
+}
+
+// Inverse of pushBrewDeductions — adds litres back to the correct source
+// (cold room batch or tank) when a keg assignment is undone. Uses the same
+// serialized queue so it can never race with a deduction happening at the
+// same time. If a cold room batch was fully consumed and removed by a prior
+// deduction, it's recreated here rather than the restoration being lost.
+async function pushBrewRestorations(fills) {
+  if (!fills || !fills.length) return;
+  _brewDeductionsQueue = _brewDeductionsQueue.then(async () => {
+  try {
+    const rows = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beerInventory,tanks)', { headers: SB_HDR })
+      .then(r=>r.json());
+    let inv   = JSON.parse(JSON.stringify(rows.find(r=>r.key==='beerInventory')?.value || []));
+    let tanks = JSON.parse(JSON.stringify(rows.find(r=>r.key==='tanks')?.value || []));
+
+    fills.forEach(f => {
+      if (f.source === 'coldroom') {
+        let invItem = inv.find(x=>x.beer===f.beer);
+        if (!invItem) { invItem = { beer: f.beer, batches: [] }; inv.push(invItem); }
+        if (!invItem.batches) invItem.batches = [];
+        let b = invItem.batches.find(b=>String(b.batchNo).replace(/^0+/,'')===String(f.batch).replace(/^0+/,''));
+        if (!b) {
+          // Batch was fully consumed and removed by an earlier deduction — recreate it
+          b = { batchNo: f.batch, litres: 0 };
+          invItem.batches.push(b);
+        }
+        b.litres = Math.round(((b.litres||0) + f.litres)*1000)/1000;
+      } else if (f.source === 'tank' && f.tankId) {
+        const tank = tanks.find(t=>String(t.id)===String(f.tankId));
+        if (tank) tank.vol = Math.round(((tank.vol||0)+f.litres)*1000)/1000;
+        else console.warn('pushBrewRestorations: tank not found', f.tankId);
+      }
+    });
+
+    const putRes = await fetch(SB_URL + '/rest/v1/brew_state', {
+      method: 'POST',
+      headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([
+        { key:'beerInventory', value:inv,   updated_at:new Date().toISOString() },
+        { key:'tanks',         value:tanks, updated_at:new Date().toISOString() }
+      ])
+    });
+    if (!putRes.ok) throw new Error('brew_state write failed: ' + putRes.status);
+  } catch(e) {
+    console.error('pushBrewRestorations error:', e);
+    showSyncError('Failed to restore stock to the brew ops dashboard after unassigning a keg. Stock there may be out of date.');
   }
   });
   return _brewDeductionsQueue;
@@ -5164,16 +5211,12 @@ async function deleteOrder(id) {
   if (!confirm(`Delete order for "${bar.barName}" (${fmtDate(o.deliveryDate)})?\n\nThis cannot be undone.`)) return;
 
   // Restore batch inventory for any assigned kegs
-  let inventoryChanged = false;
+  const allFillsToRestore = [];
   (o.assignedKegs || []).forEach(a => {
     const fills = a.fills && a.fills.length > 0
       ? a.fills
-      : (a.batch ? [{ beer: a.beer, batch: a.batch, litres: a.kegSize || 0 }] : []);
-    fills.forEach(f => {
-      if (!f.batch) return;
-      // Note: batch litres are NOT added back here — remaining is computed dynamically.
-      inventoryChanged = true;
-    });
+      : (a.batch ? [{ beer: a.beer, batch: a.batch, litres: a.kegSize || 0, source: 'coldroom' }] : []);
+    allFillsToRestore.push(...fills);
     // Always return keg to Brewery — never restore seed location
     const k = kegs.find(x=>x.kegNo===a.kegNo);
     if (k) {
@@ -5185,7 +5228,7 @@ async function deleteOrder(id) {
       kegHistory[a.kegNo] = kegHistory[a.kegNo].filter(e => e.orderId !== id);
     }
   });
-  if (inventoryChanged) { saveBreweryBeers(); }
+  if (allFillsToRestore.length) { pushBrewRestorations(allFillsToRestore); }
   saveKegs();
   saveKegHistory();
 
@@ -5284,7 +5327,12 @@ function submitOrder(btn) {
     items: newOrderState.items.map(i=>({...i,size:Number(i.size),qty:Number(i.qty)})),
     notes: newOrderState.notes,
     status: existing ? existing.status : 'pending',
-    createdAt: existing ? existing.createdAt : new Date().toISOString()
+    createdAt: existing ? existing.createdAt : new Date().toISOString(),
+    // Preserve existing keg assignments (and their fills, needed to reverse
+    // brew ops deductions later) — without this, saving any edit to an
+    // order with assigned kegs silently wipes that record and makes the
+    // already-deducted stock permanently untraceable.
+    assignedKegs: existing ? (existing.assignedKegs || []) : []
   };
   const barForLog = bars.find(x=>x.id===Number(newOrderState.barId));
   if (editOrderId) {
@@ -5431,6 +5479,8 @@ function unassignKeg(orderId, kegNo) {
   const k = kegs.find(x=>x.kegNo===kegNo);
   if (!o) return;
 
+  const assignment = (o.assignedKegs||[]).find(a=>a.kegNo===kegNo);
+
   o.assignedKegs = (o.assignedKegs||[]).filter(a=>a.kegNo!==kegNo);
   if (k) {
     // Always return to Brewery — never restore the seed location
@@ -5442,6 +5492,14 @@ function unassignKeg(orderId, kegNo) {
     kegHistory[kegNo] = kegHistory[kegNo].filter(e => e.orderId !== orderId);
     saveKegHistory();
   }
+
+  // Reverse the brew ops deduction that happened when this keg was assigned
+  // — without this, every unassign permanently and silently shrinks brew
+  // ops's stock, even if the keg is never reassigned to anything.
+  if (assignment && assignment.fills && assignment.fills.length) {
+    pushBrewRestorations(assignment.fills);
+  }
+
   saveOrders();
   saveKegs();
   renderPage();
