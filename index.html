@@ -4982,6 +4982,7 @@ let _brewDeductionsQueue = Promise.resolve();
 async function pushBrewDeductions(fills) {
   if (!fills || !fills.length) return;
   _brewDeductionsQueue = _brewDeductionsQueue.then(async () => {
+  const exhausted = []; // {beer, batch} pairs that hit 0 and should be deactivated everywhere
   try {
     const rows = await fetch(SB_URL + '/rest/v1/brew_state?select=key,value&key=in.(beerInventory,tanks)', { headers: SB_HDR })
       .then(r=>r.json());
@@ -4995,6 +4996,7 @@ async function pushBrewDeductions(fills) {
           const b = invItem.batches.find(b=>String(b.batchNo).replace(/^0+/,'')===String(f.batch).replace(/^0+/,''));
           if (b) {
             b.litres = Math.max(0, (b.litres||0) - f.litres);
+            if (b.litres <= 0) exhausted.push({ beer: f.beer, batch: f.batch });
           } else {
             console.warn('pushBrewDeductions: batch not found for deduction', f.beer, f.batch, invItem.batches.map(b=>b.batchNo));
           }
@@ -5005,16 +5007,30 @@ async function pushBrewDeductions(fills) {
         }
       } else if (f.source === 'tank' && f.tankId) {
         const tank = tanks.find(t=>String(t.id)===String(f.tankId));
-        if (tank) tank.vol = Math.max(0,(tank.vol||0)-f.litres);
+        if (tank) {
+          tank.vol = Math.max(0,(tank.vol||0)-f.litres);
+          if (tank.vol <= 0) {
+            // The batch is fully out of the tank — empty it immediately,
+            // same as brew ops's own tank-clearing logic, rather than
+            // waiting for brew ops to notice and clear it later.
+            tank.stage = 'Empty';
+            tank.beer = null;
+            tank.batchNo = null;
+            tank.batchVol = null;
+            tank.since = null;
+            tank.temp = null;
+            tank.carbonationVol = null;
+            tank.carbonationDate = null;
+            tank.readyDate = null;
+            exhausted.push({ beer: f.beer, batch: f.batch });
+          }
+        }
         else console.warn('pushBrewDeductions: tank not found', f.tankId);
       }
     });
 
     // Remove inv entries with no remaining batches
     inv = inv.filter(x => x.batches && x.batches.length > 0);
-
-    // Note: batch active/inactive state is managed by the brew dashboard and pushed
-    // via pushBreweryBeersToKegs — do not auto-deactivate here as it conflicts.
 
     const putRes = await fetch(SB_URL + '/rest/v1/brew_state', {
       method: 'POST',
@@ -5028,6 +5044,35 @@ async function pushBrewDeductions(fills) {
   } catch(e) {
     console.error('pushBrewDeductions error:', e);
     showSyncError('Failed to sync keg deduction to the brew ops dashboard. Stock there may be out of date.');
+  }
+
+  // Deactivate any batch that just hit 0, immediately — rather than waiting
+  // for brew ops to separately notice and push the same change later.
+  // Reads the CURRENT record from Supabase (not the possibly-stale local
+  // `breweryBeers` variable) to avoid clobbering other recent changes.
+  if (exhausted.length) {
+    try {
+      const kegsRes = await fetch(SB_URL + '/rest/v1/kegs?select=id,data&id=eq.__brewery_beers__', { headers: SB_HDR });
+      const kegsRows = await kegsRes.json();
+      const current = kegsRows[0]?.data?.breweryBeers || [];
+      let changed = false;
+      exhausted.forEach(({beer, batch}) => {
+        const idx = current.findIndex(b => b.beer===beer && String(b.batch).replace(/^0+/,'')===String(batch).replace(/^0+/,'') && !b.inactive);
+        if (idx>=0) { current[idx].inactive = true; current[idx].litres = 0; changed = true; }
+      });
+      if (changed) {
+        await fetch(SB_URL + '/rest/v1/kegs', {
+          method: 'POST',
+          headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ id: '__brewery_beers__', data: { breweryBeers: current }, updated_at: new Date().toISOString() })
+        });
+        // Keep the local in-memory copy in sync so the UI reflects this immediately
+        breweryBeers = current;
+        localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers));
+      }
+    } catch(e) {
+      console.error('pushBrewDeductions: failed to deactivate exhausted batch', e);
+    }
   }
   });
   return _brewDeductionsQueue;
@@ -6785,9 +6830,7 @@ function pageBeers() {
                 <span style="font-size:12px;color:var(--muted)">L</span>
               </div>
             </td>
-            <td style="padding:8px 14px">
-              <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
-            </td>
+            <td style="padding:8px 14px"></td>
           </tr>`;
         }).join('');
 
@@ -6916,9 +6959,7 @@ function pageBeers() {
                           <span style="font-size:11px;color:var(--muted);margin-left:4px">of ${brewed}L</span>`;
                         })()}
                       </td>
-                      <td style="padding:6px 14px">
-                        <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
-                      </td>
+                      <td style="padding:6px 14px"></td>
                     </tr>`;
                   }).join('');
 
