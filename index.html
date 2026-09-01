@@ -6738,10 +6738,7 @@ function pageBeers() {
               onclick="showBatchHistory('${b.code}','${bb.batch}')">${bb.batch}</td>
             <td style="padding:8px 14px">
               <div style="display:flex;align-items:center;gap:8px">
-                <input type="number" min="0" class="inp" style="width:100px;padding:5px 8px;font-size:13px;font-weight:600;color:var(--orange)"
-                  value="${bb.litres||0}"
-                  onchange="updateBatchLitres(${globalIdx}, this.value)"
-                  title="Edit litres">
+                <span style="font-size:13px;font-weight:600;color:var(--orange)" title="Litres Brewed is set from the Brewery Ops dashboard's Actual Volume — not editable here">${bb.litres||0}</span>
                 <span style="font-size:12px;color:var(--muted)">L</span>
               </div>
             </td>
@@ -6900,7 +6897,7 @@ function pageBeers() {
                       </td>
                       <td style="padding:6px 14px">
                         <div style="display:flex;gap:6px">
-                          <button class="btn btn-ghost btn-sm" onclick="editBatchLitres(${globalIdx})" title="Edit litres">✎</button>
+                          <button class="btn btn-ghost btn-sm" onclick="editBatchLitres(${globalIdx})" title="Edit brew date">✎</button>
                           <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
                         </div>
                       </td>
@@ -6912,7 +6909,7 @@ function pageBeers() {
                           <div><label class="lbl">Brew Date</label>
                             <input id="edit-batch-brewdate" class="inp" style="width:150px" type="date" value="${bb.brewDate||''}"></div>
                           <div><label class="lbl">Litres Brewed</label>
-                            <input id="edit-batch-litres" class="inp" style="width:90px" type="number" min="0" value="${bb.litres||0}"></div>
+                            <input id="edit-batch-litres" class="inp" style="width:90px" type="number" min="0" value="${bb.litres||0}" disabled title="Set from Brewery Ops dashboard's Actual Volume"></div>
                           <button class="btn btn-primary btn-sm" onclick="saveEditBatch(${globalIdx})">Save</button>
                           <button class="btn btn-ghost btn-sm" onclick="editingBatchIdx=null;renderPage()">Cancel</button>
                         </div>
@@ -7045,12 +7042,10 @@ function saveBatchForBeer(beerCode) {
 
 function saveEditBatch(idx) {
   if (!breweryBeers[idx]) return;
-  const litresEl = document.getElementById('edit-batch-litres');
   const brewDateEl = document.getElementById('edit-batch-brewdate');
-  const newVal = Number(litresEl?.value)||0;
-  breweryBeers[idx].litres = newVal;
+  // Litres Brewed is no longer editable here — it's set from the Brewery
+  // Ops dashboard's Actual Volume. Only Brew Date can be corrected.
   breweryBeers[idx].brewDate = brewDateEl?.value || breweryBeers[idx].brewDate || '';
-  if (newVal === 0) breweryBeers[idx].inactive = true;
   editingBatchIdx = null;
   saveBreweryBeers();
   renderPage();
@@ -7059,16 +7054,6 @@ function saveEditBatch(idx) {
 function editBatchLitres(idx) {
   if (!breweryBeers[idx]) return;
   editingBatchIdx = idx;
-  renderPage();
-}
-
-function updateBatchLitres(idx, value) {
-  if (!breweryBeers[idx]) return;
-  const newVal = Number(value) || 0;
-  breweryBeers[idx].litres = newVal;
-  // Auto-deactivate if reaches 0
-  if (newVal === 0) breweryBeers[idx].inactive = true;
-  saveBreweryBeers();
   renderPage();
 }
 
