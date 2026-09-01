@@ -5523,21 +5523,6 @@ async function saveBeers() {
   try { await sbUpsert('kegs', '__beers__', { beers: BEERS }); } catch(_) {}
 }
 
-function addBeer() {
-  const code = (document.getElementById('new-beer-code')?.value || newBeer.code).trim().toUpperCase();
-  const name = (document.getElementById('new-beer-name')?.value || newBeer.name).trim();
-  if (!code) { alert('Please enter a beer code.'); return; }
-  if (!name) { alert('Please enter a beer name.'); return; }
-  if (BEERS.find(b => b.code === code)) { alert(`Beer code "${code}" already exists.`); return; }
-  // Assign a colour from a palette cycling through options
-  const palette = ['#F5C842','#A3C96B','#E87C3E','#A07060','#58A6FF','#E879A6','#7C6FCD','#4BB8A9','#E8C84A','#A05EA0'];
-  const color = palette[BEERS.length % palette.length];
-  BEERS.push({ code, name, color });
-  newBeer = { code: '', name: '' };
-  saveBeers();
-  renderPage();
-}
-
 function removeBeer(idx) {
   if (BEERS.length <= 1) return;
   const removed = BEERS[idx];
@@ -6842,7 +6827,6 @@ function pageBeers() {
       <td style="font-weight:700;color:var(--accent)">${totalLitres > 0 ? totalLitres+'L' : '--'}</td>
       <td>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${!isInactiveBeer ? `<button class="btn btn-ghost btn-sm" onclick="newBatchBeer=newBatchBeer==='${b.code}'?'':'${b.code}';renderPage()">+ Batch</button>` : ''}
           ${BEERS.length > 1
             ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}"
                 style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}"
@@ -6851,27 +6835,7 @@ function pageBeers() {
         </div>
       </td>
     </tr>
-    ${batchRows}
-    ${showAddForm ? `<tr style="background:var(--accent-bg);border-bottom:2px solid rgba(212,130,26,0.2)">
-      <td colspan="5" style="padding:12px 14px">
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-          <div>
-            <label class="lbl">Batch Number</label>
-            <input id="new-batch-no-${b.code}" class="inp" style="width:160px" placeholder="e.g. BB-2025-04">
-          </div>
-          <div>
-            <label class="lbl">Brew Date</label>
-            <input id="new-batch-brewdate-${b.code}" class="inp" style="width:150px" type="date">
-          </div>
-          <div>
-            <label class="lbl">Quantity (Litres)</label>
-            <input id="new-batch-litres-${b.code}" class="inp" style="width:120px" type="number" min="0" placeholder="e.g. 500">
-          </div>
-          <button class="btn btn-primary" onclick="saveBatchForBeer('${b.code}')">Save</button>
-          <button class="btn btn-ghost" onclick="newBatchBeer='';renderPage()">Cancel</button>
-        </div>
-      </td>
-    </tr>` : ''}`;
+    ${batchRows}`;
   }).join('');
 
   // Sub-tab toggle UI
@@ -6908,7 +6872,6 @@ function pageBeers() {
                     <td colspan="2" style="font-size:12px;color:var(--muted)">${activeBatches.length > 0 ? activeBatches.length+' batch'+(activeBatches.length!==1?'es':'') : 'No active batches'}</td>
                     <td>
                       <div style="display:flex;gap:4px;flex-wrap:wrap">
-                        ${!isInactiveBeer ? `<button class="btn btn-ghost btn-sm" onclick="newBatchBeer=newBatchBeer==='${b.code}'?'':'${b.code}';renderPage()">+ Batch</button>` : ''}
                         ${BEERS.length > 1 ? `<button class="btn btn-sm ${isInactiveBeer?'btn-ghost':'btn-danger'}" style="${isInactiveBeer?'color:var(--green);border-color:var(--green)':''}" onclick="toggleBeerActive('${b.code}')">${isInactiveBeer?'Activate':'Deactivate'}</button>` : ''}
                       </div>
                     </td>
@@ -6954,55 +6917,15 @@ function pageBeers() {
                         })()}
                       </td>
                       <td style="padding:6px 14px">
-                        <div style="display:flex;gap:6px">
-                          <button class="btn btn-ghost btn-sm" onclick="editBatchLitres(${globalIdx})" title="Edit brew date">✎</button>
-                          <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
-                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="toggleBatchActive(${globalIdx})">Deactivate</button>
                       </td>
-                    </tr>` + (editingBatchIdx === globalIdx ? `<tr style="background:var(--accent-bg)">
-                      <td colspan="5" style="padding:10px 14px">
-                        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-                          <div><label class="lbl">Batch No.</label>
-                            <input class="inp" style="width:110px" value="${bb.batch}" readonly></div>
-                          <div><label class="lbl">Brew Date</label>
-                            <input id="edit-batch-brewdate" class="inp" style="width:150px" type="date" value="${bb.brewDate||''}"></div>
-                          <div><label class="lbl">Litres Brewed</label>
-                            <input id="edit-batch-litres" class="inp" style="width:90px" type="number" min="0" value="${bb.litres||0}" disabled title="Set from Brewery Ops dashboard's Actual Volume"></div>
-                          <button class="btn btn-primary btn-sm" onclick="saveEditBatch(${globalIdx})">Save</button>
-                          <button class="btn btn-ghost btn-sm" onclick="editingBatchIdx=null;renderPage()">Cancel</button>
-                        </div>
-                      </td>
-                    </tr>` : '');
+                    </tr>`;
                   }).join('');
 
-                  const addForm = showAddForm ? `<tr style="background:var(--accent-bg)">
-                    <td colspan="5" style="padding:10px 14px">
-                      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-                        <div><label class="lbl">Batch No.</label>
-                          <input id="new-batch-no-${b.code}" class="inp" style="width:130px" placeholder="e.g. 51"></div>
-                      <div><label class="lbl">Brew Date</label>
-                        <input id="new-batch-brewdate-${b.code}" class="inp" style="width:140px" type="date"></div>
-                        <div><label class="lbl">Litres</label>
-                          <input id="new-batch-litres-${b.code}" class="inp" style="width:90px" type="number" min="0" placeholder="500"></div>
-                        <button class="btn btn-primary btn-sm" onclick="saveBatchForBeer('${b.code}')">Save</button>
-                        <button class="btn btn-ghost btn-sm" onclick="newBatchBeer='';renderPage()">Cancel</button>
-                      </div>
-                    </td>
-                  </tr>` : '';
-
-                  return beerHeader + batchRows + addForm;
+                  return beerHeader + batchRows;
                 }).join('')}
               </tbody>
             </table>
-          </div>
-          <div style="display:flex;gap:10px;align-items:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap">
-            <div><label class="lbl">Beer Code</label>
-              <input id="new-beer-code" class="inp" style="width:90px;text-transform:uppercase" placeholder="e.g. IPA" maxlength="6"
-                value="${newBeer.code}" oninput="newBeer.code=this.value.toUpperCase()"></div>
-            <div><label class="lbl">Beer Name</label>
-              <input id="new-beer-name" class="inp" style="width:180px" placeholder="e.g. India Pale Ale"
-                value="${newBeer.name}" oninput="newBeer.name=this.value"></div>
-            <button class="btn btn-primary" onclick="addBeer()">+ Add Beer</button>
           </div>
           ${BEERS.some(b => b.inactive) ? `
           <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
@@ -7078,40 +7001,6 @@ function toggleBeerActive(codeOrIdx) {
   });
   saveBeers();
   saveBreweryBeers();
-  renderPage();
-}
-
-function saveBatchForBeer(beerCode) {
-  const batchEl = document.getElementById(`new-batch-no-${beerCode}`);
-  const litresEl = document.getElementById(`new-batch-litres-${beerCode}`);
-  const brewDateEl = document.getElementById(`new-batch-brewdate-${beerCode}`);
-  const batch = batchEl?.value?.trim();
-  const litres = Number(litresEl?.value) || 0;
-  const brewDate = brewDateEl?.value || '';
-  if (!batch) { alert('Please enter a batch number.'); return; }
-  if (breweryBeers.find(x => x.beer === beerCode && x.batch === batch)) {
-    alert('This batch number already exists for this beer.'); return;
-  }
-  breweryBeers.push({ beer: beerCode, batch, litres, brewDate });
-  newBatchBeer = '';
-  saveBreweryBeers();
-  renderPage();
-}
-
-function saveEditBatch(idx) {
-  if (!breweryBeers[idx]) return;
-  const brewDateEl = document.getElementById('edit-batch-brewdate');
-  // Litres Brewed is no longer editable here — it's set from the Brewery
-  // Ops dashboard's Actual Volume. Only Brew Date can be corrected.
-  breweryBeers[idx].brewDate = brewDateEl?.value || breweryBeers[idx].brewDate || '';
-  editingBatchIdx = null;
-  saveBreweryBeers();
-  renderPage();
-}
-
-function editBatchLitres(idx) {
-  if (!breweryBeers[idx]) return;
-  editingBatchIdx = idx;
   renderPage();
 }
 
