@@ -4652,6 +4652,7 @@ function pageOrders() {
                 <option value="coldroom">Cold Room</option>
                 <option value="tank">Tank</option>
               </select>
+              <div id="psource-hint-${pKey}" style="font-size:10px;color:var(--muted);margin-top:2px;"></div>
             </div>
             <div id="ptank-wrap-${pKey}" style="display:none;">
               <label class="lbl">Tank</label>
@@ -4869,16 +4870,55 @@ function updateFillSourceOpts(pKey) {
   const tankWrap  = document.getElementById(`ptank-wrap-${pKey}`);
   const tankSel   = document.getElementById(`ptank-${pKey}`);
   const beerSel   = document.getElementById(`pbeer-${pKey}`);
-  if (!sourceSel || !tankWrap || !tankSel) return;
+  const sourceHint = document.getElementById(`psource-hint-${pKey}`);
+  if (!sourceSel || !tankWrap || !tankSel || !beerSel) return;
+
+  const [beerCode, batchNo] = (beerSel.value||'').split('|');
+  const stripped = String(batchNo||'').replace(/^0+/,'');
+
+  if (beerCode) {
+    // Detect where this batch actually exists — a Ready-stage tank with
+    // this exact beer+batch, and/or the breweryBeers record's own source
+    // field for cold room — rather than always offering both regardless
+    // of reality. That's what previously let a batch which only existed
+    // in a tank get wrongly deducted from cold room instead, since nothing
+    // stopped the wrong source from being picked.
+    const matchingTanks = (brewStateTanks||[]).filter(t=>
+      t.beer===beerCode && t.stage==='Ready' &&
+      String(t.batchNo||'').replace(/^0+/,'')===stripped
+    );
+    const bbEntry = breweryBeers.find(bb=>bb.beer===beerCode && String(bb.batch).replace(/^0+/,'')===stripped && !bb.inactive);
+    const inColdRoom = !!(bbEntry && bbEntry.source === 'coldroom');
+    const inTank = matchingTanks.length > 0;
+
+    if (inTank && !inColdRoom) {
+      sourceSel.value = 'tank';
+      sourceSel.disabled = true;
+      if (sourceHint) sourceHint.textContent = 'Only in tank';
+    } else if (inColdRoom && !inTank) {
+      sourceSel.value = 'coldroom';
+      sourceSel.disabled = true;
+      if (sourceHint) sourceHint.textContent = 'Only in cold room';
+    } else {
+      // Both, or neither could be confirmed — let the brewer choose manually
+      sourceSel.disabled = false;
+      if (sourceHint) sourceHint.textContent = inTank && inColdRoom ? 'In both — please choose' : '';
+    }
+  } else {
+    sourceSel.disabled = false;
+    if (sourceHint) sourceHint.textContent = '';
+  }
+
   const isTank = sourceSel.value === 'tank';
   tankWrap.style.display = isTank ? 'block' : 'none';
-  if (isTank && beerSel && beerSel.value) {
-    const [beerCode] = beerSel.value.split('|');
+  if (isTank && beerCode) {
     const tanks = (brewStateTanks||[]).filter(t=>
-      t.beer===beerCode && t.stage==='Ready'
+      t.beer===beerCode && t.stage==='Ready' &&
+      String(t.batchNo||'').replace(/^0+/,'')===stripped
     );
-    tankSel.innerHTML = '<option value="">Select tank…</option>' +
-      tanks.map(t=>`<option value="${t.id}">${t.name} — ${t.vol||0}L (${t.stage})</option>`).join('');
+    tankSel.innerHTML = tanks.length === 1
+      ? `<option value="${tanks[0].id}" selected>${tanks[0].name} — ${tanks[0].vol||0}L (${tanks[0].stage})</option>`
+      : '<option value="">Select tank…</option>' + tanks.map(t=>`<option value="${t.id}">${t.name} — ${t.vol||0}L (${t.stage})</option>`).join('');
   }
 }
 
