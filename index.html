@@ -5137,16 +5137,22 @@ async function pushBrewRestorations(fills) {
 
     fills.forEach(f => {
       if (f.source === 'coldroom') {
-        let invItem = inv.find(x=>x.beer===f.beer);
-        if (!invItem) { invItem = { beer: f.beer, batches: [] }; inv.push(invItem); }
-        if (!invItem.batches) invItem.batches = [];
-        let b = invItem.batches.find(b=>String(b.batchNo).replace(/^0+/,'')===String(f.batch).replace(/^0+/,''));
-        if (!b) {
-          // Batch was fully consumed and removed by an earlier deduction — recreate it
-          b = { batchNo: f.batch, litres: 0 };
-          invItem.batches.push(b);
+        const invItem = inv.find(x=>x.beer===f.beer);
+        const b = invItem?.batches?.find(b=>String(b.batchNo).replace(/^0+/,'')===String(f.batch).replace(/^0+/,''));
+        if (b) {
+          b.litres = Math.round(((b.litres||0) + f.litres)*1000)/1000;
+        } else {
+          // No matching batch found — could mean it was fully consumed and
+          // removed (legitimate, restoring should recreate it), OR it
+          // could mean this fill's original deduction never found a match
+          // in the first place (e.g. the batch was wrongly recorded as
+          // coldroom-sourced when it only ever existed in a tank) — in
+          // which case recreating it here just creates a phantom entry
+          // that was never real. We can't tell these apart from here, so
+          // we don't guess — surface it instead of silently fabricating data.
+          console.warn(`pushBrewRestorations: no coldroom batch found for ${f.beer} ${f.batch} — skipped restoring ${f.litres}L rather than risk creating a phantom entry`);
+          showSyncError(`Could not restore ${f.litres}L to ${f.beer} batch ${f.batch} in cold room — no matching batch found there. If this batch actually lives in a tank, check that stock manually.`);
         }
-        b.litres = Math.round(((b.litres||0) + f.litres)*1000)/1000;
       } else if (f.source === 'tank' && f.tankId) {
         const tank = tanks.find(t=>String(t.id)===String(f.tankId));
         if (tank) tank.vol = Math.round(((tank.vol||0)+f.litres)*1000)/1000;
@@ -5166,6 +5172,43 @@ async function pushBrewRestorations(fills) {
   } catch(e) {
     console.error('pushBrewRestorations error:', e);
     showSyncError('Failed to restore stock to the brew ops dashboard after unassigning a keg. Stock there may be out of date.');
+  }
+
+  // Also reactivate the matching entry in the stock summary if it's
+  // currently marked inactive — deducting a batch down to zero can mark
+  // it inactive, but nothing was reversing that when the deduction itself
+  // got undone (e.g. unassigning a keg). Restoring quantity to a batch
+  // should also make it available again.
+  try {
+    const kegsRes = await fetch(SB_URL + '/rest/v1/kegs?select=id,data&id=eq.__brewery_beers__', { headers: SB_HDR });
+    const kegsRows = await kegsRes.json();
+    const current = kegsRows[0]?.data?.breweryBeers || [];
+    let changed = false;
+    fills.forEach(f => {
+      const idx = current.findIndex(b => b.beer===f.beer && String(b.batch).replace(/^0+/,'')===String(f.batch).replace(/^0+/,''));
+      if (idx>=0 && current[idx].inactive) {
+        current[idx].inactive = false;
+        // litres represents the TOTAL ever brewed (bar order computes
+        // remaining separately by subtracting everything dispatched) — an
+        // exhausted entry has litres driven down to 0, which is now wrong
+        // once it's reactivated. Restore it to totalLitres so the
+        // remaining calculation works correctly again, rather than
+        // requiring this to be fixed by hand every time.
+        if (current[idx].totalLitres != null) current[idx].litres = current[idx].totalLitres;
+        changed = true;
+      }
+    });
+    if (changed) {
+      await fetch(SB_URL + '/rest/v1/kegs', {
+        method: 'POST',
+        headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ id: '__brewery_beers__', data: { breweryBeers: current }, updated_at: new Date().toISOString() })
+      });
+      breweryBeers = current;
+      localStorage.setItem('2down_brewery_beers', JSON.stringify(breweryBeers));
+    }
+  } catch(e) {
+    console.error('pushBrewRestorations: failed to reactivate stock entry', e);
   }
   });
   return _brewDeductionsQueue;
@@ -7067,7 +7110,14 @@ function pageBeers() {
 
 function toggleBatchActive(idx) {
   if (!breweryBeers[idx]) return;
-  breweryBeers[idx].inactive = !breweryBeers[idx].inactive;
+  const wasInactive = breweryBeers[idx].inactive;
+  breweryBeers[idx].inactive = !wasInactive;
+  // Reactivating: litres is the TOTAL ever brewed and gets driven to 0 once
+  // exhausted — restore it to totalLitres so remaining-stock math works
+  // correctly again, rather than leaving it stuck at 0 despite being active.
+  if (wasInactive && breweryBeers[idx].totalLitres != null) {
+    breweryBeers[idx].litres = breweryBeers[idx].totalLitres;
+  }
   saveBreweryBeers();
   renderPage();
 }
