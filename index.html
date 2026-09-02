@@ -71,6 +71,7 @@
   /* Grid */
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .grid5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 22px; }
 
   /* Stat cards */
   .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
@@ -130,6 +131,7 @@
     #menu-btn { display: flex; }
     #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .grid4 { grid-template-columns: repeat(2, 1fr); }
+    .grid5 { grid-template-columns: repeat(2, 1fr); }
     .grid2 { grid-template-columns: 1fr; }
     .form-row { grid-template-columns: 1fr 1fr; }
     .form-row > *:nth-child(3) { grid-column: 1; }
@@ -147,6 +149,7 @@
   @media (max-width: 480px) {
     .stat-num { font-size: 26px; }
     .grid4 { grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .grid5 { grid-template-columns: repeat(2,1fr); gap: 10px; }
   }
 
   /* Toast */
@@ -4450,7 +4453,7 @@ function pageDashboard() {
       </div>
       ${toggleBtns}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px">
+    <div class="grid5">
       ${[
         [`${shortMonth} Orders`,  monthOrders.filter(hasKegs).length, '#F5C842'],
         ['Kegs Shipped',          monthKegs,          '#E87C3E'],
