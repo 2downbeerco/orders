@@ -5531,7 +5531,8 @@ function pageKegging() {
   const total50L = filtered.reduce((s,o)=>(o.items||[]).filter(i=>i.size===50).reduce((ss,i)=>ss+i.qty,s),0);
   const totalLitresActual = Object.values(summary).reduce((s,v)=>s+v._litres,0);
 
-  const sumRows = BEERS.filter(b=>!b.inactive)
+  const sumRows = BEERS
+    .filter(b=>summary[b.code] && (summary[b.code]._20+summary[b.code]._50>0))
     .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0,_litres:0} }))
     .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
     .map(({b,s})=>{
