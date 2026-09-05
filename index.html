@@ -7219,48 +7219,76 @@ function computeMonthlyReport(monthValue) {
     }
   });
 
-  // Litres Shipped this month, and cumulative brewed/shipped up to end of
-  // month (for the stock figure) — handles both historical orders (which
-  // record items/qty/size rather than assignedKegs/fills) and live orders,
-  // matching how countLitres() already distinguishes the two elsewhere.
-  const shippedThisMonth = {}, brewedToDate = {}, shippedToDate = {};
-  BEERS.forEach(b => { shippedThisMonth[b.code]=0; brewedToDate[b.code]=0; shippedToDate[b.code]=0; });
-
-  breweryBeers.forEach(bb => {
-    if (!bb.beer || !(bb.beer in brewedToDate)) return;
-    // A batch with no brewDate at all still represents real litres that
-    // exist right now — excluding it here (rather than just from the
-    // month-specific "Brewed" figure, where we genuinely can't attribute
-    // it to a particular month) was undercounting the cumulative total,
-    // which is what made Stock at Month End come out negative and get
-    // clamped to 0 for most beers.
-    if (!bb.brewDate || bb.brewDate < nextMonth) {
-      brewedToDate[bb.beer] += Number(bb.totalLitres != null ? bb.totalLitres : bb.litres) || 0;
+  // Litres Shipped — build a flat list of shipment events (beer, batch,
+  // litres, date) once, used both for the "shipped this month" total and
+  // for matching shipments to a SPECIFIC batch below. Historical orders
+  // don't record which batch they came from (batch: null) — they can
+  // still count toward "shipped this month", but can never be matched to
+  // a specific batch's remaining stock, since we don't know which batch
+  // they actually depleted.
+  const stripBatch = (b) => String(b||'').replace(/^0+/,'');
+  const shipmentEvents = [];
+  orders.forEach(o => {
+    if (!o.deliveryDate) return;
+    if (o.source === 'historical') {
+      (o.items||[]).forEach(i => shipmentEvents.push({
+        beer: i.beer, batch: null,
+        litres: (Number(i.qty)||0)*(Number(i.actualVol||i.size)||0),
+        date: o.deliveryDate
+      }));
+    } else {
+      (o.assignedKegs||[]).forEach(a => (a.fills||[]).forEach(f => shipmentEvents.push({
+        beer: f.beer, batch: f.batch, litres: Number(f.litres)||0, date: o.deliveryDate
+      })));
     }
   });
 
-  orders.forEach(o => {
-    if (!o.deliveryDate) return;
-    const inMonth = o.deliveryDate >= monthStart && o.deliveryDate < nextMonth;
-    const upToMonthEnd = o.deliveryDate < nextMonth;
-    if (!inMonth && !upToMonthEnd) return;
+  const shippedThisMonth = {};
+  BEERS.forEach(b => { shippedThisMonth[b.code]=0; });
+  shipmentEvents.forEach(e => {
+    if (e.beer && e.beer in shippedThisMonth && e.date >= monthStart && e.date < nextMonth) {
+      shippedThisMonth[e.beer] += e.litres;
+    }
+  });
+  Object.keys(results).forEach(code => { results[code].shipped = Math.round(shippedThisMonth[code]*100)/100; });
 
-    const addLitres = (beer, litres) => {
-      if (!beer || !(beer in shippedToDate)) return;
-      if (upToMonthEnd) shippedToDate[beer] += litres;
-      if (inMonth) shippedThisMonth[beer] += litres;
-    };
+  // Stock at Month End = qty ready at month end + qty not yet ready at
+  // month end. Computed per BATCH rather than as two aggregate totals —
+  // comparing "all shipments ever" against "all batches currently on
+  // record" could go negative if shipment history extends further back
+  // than batch history does. Per-batch, any shipment that can't be
+  // matched to a specific tracked batch simply doesn't subtract from
+  // anything, instead of dragging every beer's total down.
+  const stockEnd = {};
+  BEERS.forEach(b => { stockEnd[b.code]=0; });
 
-    if (o.source === 'historical') {
-      (o.items||[]).forEach(i => addLitres(i.beer, (Number(i.qty)||0)*(Number(i.actualVol||i.size)||0)));
-    } else {
-      (o.assignedKegs||[]).forEach(a => (a.fills||[]).forEach(f => addLitres(f.beer, Number(f.litres)||0)));
+  // Ready portion: every batch that existed by month end (known brewDate
+  // before next month, or no brewDate at all — see note above on why
+  // undated batches are still counted), minus shipments matching that
+  // exact batch, up to month end.
+  breweryBeers.forEach(bb => {
+    if (!bb.beer || !(bb.beer in stockEnd)) return;
+    if (bb.brewDate && bb.brewDate >= nextMonth) return; // didn't exist yet by month end
+    const totalForBatch = Number(bb.totalLitres != null ? bb.totalLitres : bb.litres) || 0;
+    const shippedForBatch = shipmentEvents
+      .filter(e => e.beer===bb.beer && e.batch!=null && stripBatch(e.batch)===stripBatch(bb.batch) && e.date < nextMonth)
+      .reduce((s,e)=>s+e.litres, 0);
+    stockEnd[bb.beer] += Math.max(0, totalForBatch - shippedForBatch);
+  });
+
+  // Not-yet-ready portion: batches currently in progress (live snapshot
+  // only — see limitation above), whose brew start date is on or before
+  // month end. Nothing to subtract here, since a batch can't be shipped
+  // from before it reaches Ready.
+  (brewStateTanks||[]).forEach(t => {
+    if (t.beer && (t.beer in stockEnd) && ['Fermenting','Conditioning','Carbonating'].includes(t.stage)
+        && t.since && t.since < nextMonth) {
+      stockEnd[t.beer] += Number(t.batchVol != null ? t.batchVol : t.vol) || 0;
     }
   });
 
   Object.keys(results).forEach(code => {
-    results[code].shipped = Math.round(shippedThisMonth[code]*100)/100;
-    results[code].stockEnd = Math.max(0, Math.round((brewedToDate[code]-shippedToDate[code])*100)/100);
+    results[code].stockEnd = Math.round(stockEnd[code]*100)/100;
   });
 
   return { results };
@@ -7289,7 +7317,7 @@ function renderMonthlyReport() {
   const totalStock = rows.reduce((s,[,r])=>s+r.stockEnd,0);
 
   document.getElementById('mrpt-results').innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}<span style="font-size:11px"> — Litres Brewed includes beer still in progress (fermenting/conditioning/carbonating), not just finished stock</span></div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}<br><span style="font-size:11px">Litres Brewed and Stock at Month End both include beer still in progress (fermenting/conditioning/carbonating). For past months, the in-progress portion reflects only what's <em>still</em> in progress today — if something has since finished, it's counted as ready instead, which can slightly understate how much was actually in progress at that specific past date.</span></div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Beer</th><th>Litres Brewed</th><th>Litres Shipped</th><th>Stock at Month End</th></tr></thead>
       <tbody>${tableRows}</tbody>
