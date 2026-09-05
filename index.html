@@ -4321,19 +4321,25 @@ function pageDashboard() {
       if (o.source === 'historical') {
         (o.items||[]).forEach(i => {
           const bc = baseCode(i.beer);
-          if (!s[bc]) s[bc]={_20:0,_50:0};
+          if (!s[bc]) s[bc]={_20:0,_50:0,_litres:0};
           s[bc]._20 += i.size===20?i.qty:0;
           s[bc]._50 += i.size===50?i.qty:0;
+          s[bc]._litres += (i.size||0)*(i.qty||0);
         });
       } else {
         (o.assignedKegs||[]).forEach(a => {
           const beer = a.beer||'';
           if (!beer) return;
           const bc = baseCode(beer);
-          if (!s[bc]) s[bc]={_20:0,_50:0};
+          if (!s[bc]) s[bc]={_20:0,_50:0,_litres:0};
           const size = a.kegSize || 20;
           s[bc]._20 += size===20?1:0;
           s[bc]._50 += size===50?1:0;
+          // Use the actual litres put in the keg (from fills), not the
+          // keg's nominal size — a 20L keg only partially filled should
+          // count as however much actually went in, not a full 20L.
+          const actualLitres = (a.fills||[]).reduce((sum,f)=>sum+(f.litres||0), 0);
+          s[bc]._litres += actualLitres>0 ? actualLitres : size;
         });
       }
     });
@@ -4355,20 +4361,21 @@ function pageDashboard() {
       barMap[bid].orders.push(o);
     });
     return Object.values(barMap)
-      .map(entry => ({...entry, totalKegs: entry.orders.reduce((s,o)=>s+countKegs(o),0)}))
+      .map(entry => ({...entry, totalKegs: entry.orders.reduce((s,o)=>s+countKegs(o),0), totalLitres: entry.orders.reduce((s,o)=>s+countLitres(o),0)}))
       .sort((a,b) => b.totalKegs - a.totalKegs)
-      .map(({bar, orders: bOrders, totalKegs}) => {
+      .map(({bar, orders: bOrders, totalKegs, totalLitres}) => {
         const isOpen = dashExpandedBar === bar.id;
         const expandedContent = isOpen ? (() => {
           const deliveryRows = bOrders
             .sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate))
             .map(o => {
               const kegs = countKegs(o);
+              const litres = countLitres(o);
               const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
               return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
                 <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
                 <span style="flex:1;color:var(--text)">${items}</span>
-                <span style="font-weight:600;color:var(--orange)">${kegs} keg${kegs!==1?'s':''}</span>
+                <span style="font-weight:600;color:var(--orange)">${kegs} keg${kegs!==1?'s':''}${litres?' · '+litres+'L':''}</span>
               </div>`;
             }).join('');
           return `<div style="padding-bottom:10px">${deliveryRows}</div>`;
@@ -4377,7 +4384,7 @@ function pageDashboard() {
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;cursor:pointer"
             onclick="dashExpandedBar=dashExpandedBar===${bar.id}?null:${bar.id};renderPage()">
             <div style="font-weight:600;font-size:14px">${bar.barName}</div>
-            <span style="font-size:13px;font-weight:700;color:var(--orange)">${totalKegs} keg${totalKegs!==1?'s':''}</span>
+            <span style="font-size:13px;font-weight:700;color:var(--orange)">${totalKegs} keg${totalKegs!==1?'s':''}${totalLitres?' · '+totalLitres+'L':''}</span>
           </div>
           ${expandedContent}
         </div>`;
@@ -4385,7 +4392,7 @@ function pageDashboard() {
   };
 
   const beerSummaryRows = BEERS
-    .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
+    .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0,_litres:0} }))
     .filter(({s})=>s._20+s._50>0)
     .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
     .map(({b,s})=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--hover)">
@@ -4395,7 +4402,8 @@ function pageDashboard() {
       </div>
       <div style="font-size:12px;text-align:right">
         <span style="color:var(--muted)">20L:</span> <b>${s._20}</b> &nbsp;·&nbsp;
-        <span style="color:var(--muted)">50L:</span> <b>${s._50}</b>
+        <span style="color:var(--muted)">50L:</span> <b>${s._50}</b> &nbsp;·&nbsp;
+        <span style="color:var(--muted)">Litres:</span> <b>${s._litres}L</b>
       </div>
     </div>`).join('') || `<div class="empty" style="padding:20px">No orders</div>`;
 
@@ -5500,25 +5508,38 @@ function pageKegging() {
 
   const summary = {};
   filtered.forEach(o=>(o.items||[]).forEach(i=>{
-    if(!summary[i.beer]) summary[i.beer]={_20:0,_50:0};
+    if(!summary[i.beer]) summary[i.beer]={_20:0,_50:0,_litres:0};
     summary[i.beer]._20 += i.size===20?i.qty:0;
     summary[i.beer]._50 += i.size===50?i.qty:0;
+
+    // Litres: use the ACTUAL amount kegged (from assignedKegs' fills) for
+    // whichever of this beer+size have already been assigned — a 20L keg
+    // only partially filled (e.g. 15L) should count as 15, not a full 20.
+    // Any remaining requested-but-not-yet-assigned kegs fall back to the
+    // nominal size, since there's no actual figure for them yet.
+    const assignedOfThisKind = (o.assignedKegs||[]).filter(a=>a.beer===i.beer && (a.kegSize||20)===i.size);
+    const assignedLitres = assignedOfThisKind.reduce((sum,a)=>{
+      const fillLitres = (a.fills||[]).reduce((s,f)=>s+(f.litres||0),0);
+      return sum + (fillLitres>0 ? fillLitres : i.size);
+    }, 0);
+    const stillUnassigned = Math.max(0, i.qty - assignedOfThisKind.length);
+    summary[i.beer]._litres += assignedLitres + stillUnassigned*i.size;
   }));
 
   const totalKegsNeeded = filtered.reduce((s,o)=>(o.items||[]).reduce((ss,i)=>ss+i.qty,s),0);
   const total20L = filtered.reduce((s,o)=>(o.items||[]).filter(i=>i.size===20).reduce((ss,i)=>ss+i.qty,s),0);
   const total50L = filtered.reduce((s,o)=>(o.items||[]).filter(i=>i.size===50).reduce((ss,i)=>ss+i.qty,s),0);
+  const totalLitresActual = Object.values(summary).reduce((s,v)=>s+v._litres,0);
 
   const sumRows = BEERS.filter(b=>!b.inactive)
-    .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0} }))
+    .map(b=>({ b, s: summary[b.code]||{_20:0,_50:0,_litres:0} }))
     .sort((a,b)=>(b.s._20+b.s._50)-(a.s._20+a.s._50))
     .map(({b,s})=>{
-      const L = s._20*20+s._50*50;
       return `<tr>
         <td>${badge(b.code,b.color)} <span style="font-size:12px;color:var(--muted);margin-left:8px">${b.name}</span></td>
         <td style="font-weight:700;color:var(--accent)">${s._20}</td>
         <td style="font-weight:700;color:var(--accent)">${s._50}</td>
-        <td style="font-weight:700;color:var(--text)">${L}L</td>
+        <td style="font-weight:700;color:var(--text)">${s._litres}L</td>
       </tr>`;
     }).join('');
 
@@ -5566,7 +5587,7 @@ function pageKegging() {
             <td style="font-weight:700">Total</td>
             <td style="font-weight:800;color:var(--accent);font-size:15px">${total20L}</td>
             <td style="font-weight:800;color:var(--accent);font-size:15px">${total50L}</td>
-            <td style="font-weight:700">${total20L*20+total50L*50}L</td>
+            <td style="font-weight:700">${totalLitresActual}L</td>
           </tr></tbody>
         </table>
       </div>
