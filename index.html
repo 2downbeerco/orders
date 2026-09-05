@@ -7213,7 +7213,13 @@ function computeMonthlyReport(monthValue) {
 
   breweryBeers.forEach(bb => {
     if (!bb.beer || !(bb.beer in brewedToDate)) return;
-    if (bb.brewDate && bb.brewDate < nextMonth) {
+    // A batch with no brewDate at all still represents real litres that
+    // exist right now — excluding it here (rather than just from the
+    // month-specific "Brewed" figure, where we genuinely can't attribute
+    // it to a particular month) was undercounting the cumulative total,
+    // which is what made Stock at Month End come out negative and get
+    // clamped to 0 for most beers.
+    if (!bb.brewDate || bb.brewDate < nextMonth) {
       brewedToDate[bb.beer] += Number(bb.totalLitres != null ? bb.totalLitres : bb.litres) || 0;
     }
   });
@@ -7242,41 +7248,65 @@ function computeMonthlyReport(monthValue) {
     results[code].stockEnd = Math.max(0, Math.round((brewedToDate[code]-shippedToDate[code])*100)/100);
   });
 
-  return results;
+  // WIP (Work in Progress) — beer currently sitting in a tank that hasn't
+  // reached Ready yet (Fermenting/Conditioning/Carbonating). This comes
+  // from brewStateTanks, which is only a LIVE snapshot synced from brew
+  // ops — there's no historical record of what was in progress at the end
+  // of a past month, so this is only meaningful when reporting on the
+  // current month. isCurrentMonth is attached so the caller can decide
+  // whether to display it or show a dash instead.
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()+1;
+  if (isCurrentMonth) {
+    (brewStateTanks||[]).forEach(t => {
+      if (t.beer && results[t.beer] && ['Fermenting','Conditioning','Carbonating'].includes(t.stage)) {
+        results[t.beer].wip = (results[t.beer].wip||0) + (Number(t.vol)||0);
+      }
+    });
+  }
+
+  return { results, isCurrentMonth };
 }
 
 function renderMonthlyReport() {
   const monthValue = document.getElementById('mrpt-month').value;
   if (!monthValue) { alert('Please select a month.'); return; }
-  const results = computeMonthlyReport(monthValue);
+  const { results, isCurrentMonth } = computeMonthlyReport(monthValue);
   const [year, month] = monthValue.split('-').map(Number);
   const monthLabel = new Date(year, month-1, 1).toLocaleDateString('en-IN', {month:'long', year:'numeric'});
 
   const rows = Object.entries(results)
-    .filter(([code,r]) => r.brewed>0 || r.shipped>0 || r.stockEnd>0)
+    .filter(([code,r]) => r.brewed>0 || r.shipped>0 || r.stockEnd>0 || r.wip>0)
     .sort((a,b) => b[1].brewed - a[1].brewed);
+
+  const wipCell = (r) => isCurrentMonth
+    ? `${r.wip||0}L`
+    : `<span title="Work-in-progress is only available for the current month — brew ops doesn't keep a historical record of what was fermenting/conditioning at the end of a past month" style="color:var(--muted)">—</span>`;
 
   const tableRows = rows.map(([code,r]) => `<tr>
     <td>${badge(code,(BEERS.find(b=>b.code===code)||{}).color||'#888')} <span style="font-size:12px;color:var(--muted);margin-left:6px">${r.name}</span></td>
     <td style="font-weight:600">${r.brewed}L</td>
     <td style="font-weight:600">${r.shipped}L</td>
     <td style="font-weight:700;color:var(--accent)">${r.stockEnd}L</td>
-  </tr>`).join('') || `<tr><td colspan="4" class="empty">No activity recorded for ${monthLabel}</td></tr>`;
+    <td style="font-weight:600;color:var(--muted)">${wipCell(r)}</td>
+  </tr>`).join('') || `<tr><td colspan="5" class="empty">No activity recorded for ${monthLabel}</td></tr>`;
 
   const totalBrewed = rows.reduce((s,[,r])=>s+r.brewed,0);
   const totalShipped = rows.reduce((s,[,r])=>s+r.shipped,0);
   const totalStock = rows.reduce((s,[,r])=>s+r.stockEnd,0);
+  const totalWip = rows.reduce((s,[,r])=>s+(r.wip||0),0);
 
   document.getElementById('mrpt-results').innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}${!isCurrentMonth?' <span style="font-size:11px">(WIP only available for the current month)</span>':''}</div>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Beer</th><th>Litres Brewed</th><th>Litres Shipped</th><th>Stock at Month End</th></tr></thead>
+      <thead><tr><th>Beer</th><th>Litres Brewed</th><th>Litres Shipped</th><th>Stock at Month End</th><th>WIP (in tank)</th></tr></thead>
       <tbody>${tableRows}</tbody>
       ${rows.length ? `<tfoot><tr style="border-top:2px solid var(--border)">
         <td style="font-weight:700">Total</td>
         <td style="font-weight:700">${totalBrewed}L</td>
         <td style="font-weight:700">${totalShipped}L</td>
         <td style="font-weight:700;color:var(--accent)">${totalStock}L</td>
+        <td style="font-weight:700;color:var(--muted)">${isCurrentMonth?totalWip+'L':'—'}</td>
       </tr></tfoot>` : ''}
     </table></div>
     <div style="margin-top:14px;display:flex;justify-content:flex-end">
@@ -7284,15 +7314,15 @@ function renderMonthlyReport() {
     </div>`;
 
   window._mrptCurrentRows = rows;
-  window._mrptCurrentTotals = { totalBrewed, totalShipped, totalStock };
+  window._mrptCurrentTotals = { totalBrewed, totalShipped, totalStock, totalWip: isCurrentMonth?totalWip:null };
 }
 
 function copyMonthlyReportCSV(monthLabel) {
   const rows = window._mrptCurrentRows || [];
-  const totals = window._mrptCurrentTotals || {totalBrewed:0,totalShipped:0,totalStock:0};
-  let csv = `Monthly Report — ${monthLabel}\nBeer,Litres Brewed,Litres Shipped,Stock at Month End\n`;
-  rows.forEach(([code,r]) => { csv += `${r.name},${r.brewed},${r.shipped},${r.stockEnd}\n`; });
-  csv += `Total,${totals.totalBrewed},${totals.totalShipped},${totals.totalStock}\n`;
+  const totals = window._mrptCurrentTotals || {totalBrewed:0,totalShipped:0,totalStock:0,totalWip:null};
+  let csv = `Monthly Report — ${monthLabel}\nBeer,Litres Brewed,Litres Shipped,Stock at Month End,WIP (in tank)\n`;
+  rows.forEach(([code,r]) => { csv += `${r.name},${r.brewed},${r.shipped},${r.stockEnd},${totals.totalWip!=null?(r.wip||0):''}\n`; });
+  csv += `Total,${totals.totalBrewed},${totals.totalShipped},${totals.totalStock},${totals.totalWip!=null?totals.totalWip:''}\n`;
   navigator.clipboard.writeText(csv).then(() => alert('Copied to clipboard'))
     .catch(() => alert('Could not copy — please select and copy manually.'));
 }
