@@ -7005,7 +7005,10 @@ function pageBeers() {
   if (beersSubTab === 'active') {
     return `
       <div style="max-width:820px">
-        ${subTabBar}
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+          ${subTabBar.replace('margin-bottom:20px','margin-bottom:0')}
+          <button class="btn btn-ghost btn-sm" onclick="openMonthlyReportModal()">📊 Monthly Report</button>
+        </div>
         <div class="card">
           <div class="tbl-wrap">
             <table class="tbl">
@@ -7158,6 +7161,140 @@ function toggleBeerActive(codeOrIdx) {
   saveBeers();
   saveBreweryBeers();
   renderPage();
+}
+
+// Monthly report for the CA — Litres Brewed, Litres Shipped, and Stock at
+// end of month, per beer. Computed retroactively from existing records
+// (breweryBeers' brewDate/totalLitres, and orders' deliveryDate/fills)
+// rather than needing any separate historical tracking, since batches and
+// dispatch records already persist even once fully consumed.
+function openMonthlyReportModal() {
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:720px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">Monthly Report</div>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#999">×</button>
+        </div>
+        <div style="display:flex;gap:10px;align-items:end;margin-bottom:16px">
+          <div><label class="lbl">Month</label>
+            <input class="inp" id="mrpt-month" type="month" value="${defaultMonth}" style="width:160px"></div>
+          <button class="btn btn-primary" onclick="renderMonthlyReport()">Generate</button>
+        </div>
+        <div id="mrpt-results"></div>
+      </div>
+    </div>`;
+}
+
+function computeMonthlyReport(monthValue) {
+  const [year, month] = monthValue.split('-').map(Number);
+  const monthStart = `${monthValue}-01`;
+  const nextMonth = month === 12 ? `${year+1}-01-01` : `${year}-${String(month+1).padStart(2,'0')}-01`;
+
+  const results = {};
+  BEERS.forEach(b => { results[b.code] = { name: b.name, brewed: 0, shipped: 0, stockEnd: 0 }; });
+
+  // Litres Brewed this month: batches whose brew date falls within the month
+  breweryBeers.forEach(bb => {
+    if (!bb.beer || !results[bb.beer]) return;
+    if (bb.brewDate && bb.brewDate >= monthStart && bb.brewDate < nextMonth) {
+      results[bb.beer].brewed += Number(bb.totalLitres != null ? bb.totalLitres : bb.litres) || 0;
+    }
+  });
+
+  // Litres Shipped this month, and cumulative brewed/shipped up to end of
+  // month (for the stock figure) — handles both historical orders (which
+  // record items/qty/size rather than assignedKegs/fills) and live orders,
+  // matching how countLitres() already distinguishes the two elsewhere.
+  const shippedThisMonth = {}, brewedToDate = {}, shippedToDate = {};
+  BEERS.forEach(b => { shippedThisMonth[b.code]=0; brewedToDate[b.code]=0; shippedToDate[b.code]=0; });
+
+  breweryBeers.forEach(bb => {
+    if (!bb.beer || !(bb.beer in brewedToDate)) return;
+    if (bb.brewDate && bb.brewDate < nextMonth) {
+      brewedToDate[bb.beer] += Number(bb.totalLitres != null ? bb.totalLitres : bb.litres) || 0;
+    }
+  });
+
+  orders.forEach(o => {
+    if (!o.deliveryDate) return;
+    const inMonth = o.deliveryDate >= monthStart && o.deliveryDate < nextMonth;
+    const upToMonthEnd = o.deliveryDate < nextMonth;
+    if (!inMonth && !upToMonthEnd) return;
+
+    const addLitres = (beer, litres) => {
+      if (!beer || !(beer in shippedToDate)) return;
+      if (upToMonthEnd) shippedToDate[beer] += litres;
+      if (inMonth) shippedThisMonth[beer] += litres;
+    };
+
+    if (o.source === 'historical') {
+      (o.items||[]).forEach(i => addLitres(i.beer, (Number(i.qty)||0)*(Number(i.actualVol||i.size)||0)));
+    } else {
+      (o.assignedKegs||[]).forEach(a => (a.fills||[]).forEach(f => addLitres(f.beer, Number(f.litres)||0)));
+    }
+  });
+
+  Object.keys(results).forEach(code => {
+    results[code].shipped = Math.round(shippedThisMonth[code]*100)/100;
+    results[code].stockEnd = Math.max(0, Math.round((brewedToDate[code]-shippedToDate[code])*100)/100);
+  });
+
+  return results;
+}
+
+function renderMonthlyReport() {
+  const monthValue = document.getElementById('mrpt-month').value;
+  if (!monthValue) { alert('Please select a month.'); return; }
+  const results = computeMonthlyReport(monthValue);
+  const [year, month] = monthValue.split('-').map(Number);
+  const monthLabel = new Date(year, month-1, 1).toLocaleDateString('en-IN', {month:'long', year:'numeric'});
+
+  const rows = Object.entries(results)
+    .filter(([code,r]) => r.brewed>0 || r.shipped>0 || r.stockEnd>0)
+    .sort((a,b) => b[1].brewed - a[1].brewed);
+
+  const tableRows = rows.map(([code,r]) => `<tr>
+    <td>${badge(code,(BEERS.find(b=>b.code===code)||{}).color||'#888')} <span style="font-size:12px;color:var(--muted);margin-left:6px">${r.name}</span></td>
+    <td style="font-weight:600">${r.brewed}L</td>
+    <td style="font-weight:600">${r.shipped}L</td>
+    <td style="font-weight:700;color:var(--accent)">${r.stockEnd}L</td>
+  </tr>`).join('') || `<tr><td colspan="4" class="empty">No activity recorded for ${monthLabel}</td></tr>`;
+
+  const totalBrewed = rows.reduce((s,[,r])=>s+r.brewed,0);
+  const totalShipped = rows.reduce((s,[,r])=>s+r.shipped,0);
+  const totalStock = rows.reduce((s,[,r])=>s+r.stockEnd,0);
+
+  document.getElementById('mrpt-results').innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}</div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Beer</th><th>Litres Brewed</th><th>Litres Shipped</th><th>Stock at Month End</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+      ${rows.length ? `<tfoot><tr style="border-top:2px solid var(--border)">
+        <td style="font-weight:700">Total</td>
+        <td style="font-weight:700">${totalBrewed}L</td>
+        <td style="font-weight:700">${totalShipped}L</td>
+        <td style="font-weight:700;color:var(--accent)">${totalStock}L</td>
+      </tr></tfoot>` : ''}
+    </table></div>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="copyMonthlyReportCSV('${monthLabel}')">📋 Copy as CSV</button>
+    </div>`;
+
+  window._mrptCurrentRows = rows;
+  window._mrptCurrentTotals = { totalBrewed, totalShipped, totalStock };
+}
+
+function copyMonthlyReportCSV(monthLabel) {
+  const rows = window._mrptCurrentRows || [];
+  const totals = window._mrptCurrentTotals || {totalBrewed:0,totalShipped:0,totalStock:0};
+  let csv = `Monthly Report — ${monthLabel}\nBeer,Litres Brewed,Litres Shipped,Stock at Month End\n`;
+  rows.forEach(([code,r]) => { csv += `${r.name},${r.brewed},${r.shipped},${r.stockEnd}\n`; });
+  csv += `Total,${totals.totalBrewed},${totals.totalShipped},${totals.totalStock}\n`;
+  navigator.clipboard.writeText(csv).then(() => alert('Copied to clipboard'))
+    .catch(() => alert('Could not copy — please select and copy manually.'));
 }
 
 function showBatchHistory(beerCode, batchNo) {
