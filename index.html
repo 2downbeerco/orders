@@ -3212,19 +3212,6 @@ function setBarsSearch(v) {
   if (!v) { renderPage(); return; }
   _filterRows('bars-tbody', v);
 }
-function setRcSearch(v) {
-  rcSearch = v;
-  if (!v) { renderPage(); return; }
-  _filterRows('rc-tbody', v);
-  // Update counter
-  const container = document.getElementById('rc-tbody');
-  const counter = document.getElementById('rc-count');
-  if (container && counter) {
-    const total = container.querySelectorAll('[data-search]').length;
-    const visible = [...container.querySelectorAll('[data-search]')].filter(el => el.style.display !== 'none').length;
-    counter.textContent = v ? `${visible} of ${total}` : `${total} bars`;
-  }
-}
 function _filterRows(containerId, query) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -7429,8 +7416,15 @@ async function saveRateCard() {
 }
 
 function pageRateCard() {
-  const activeBars = bars.filter(b => !b.inactive)
+  const q = (rcSearch||'').toLowerCase();
+  const allActiveBars = bars.filter(b => !b.inactive)
     .sort((a,b) => a.barName.localeCompare(b.barName));
+  const activeBars = q
+    ? allActiveBars.filter(b => {
+        const entity = (rateCard[b.id]||{}).__entity__ || 'SAGA GYPSY BEER PROJECT';
+        return `${b.barName} ${b.area} ${entity}`.toLowerCase().includes(q);
+      })
+    : allActiveBars;
 
   const rows = activeBars.map(b => {
     const rates = rateCard[b.id] || {};
@@ -7511,7 +7505,7 @@ function pageRateCard() {
         </div>
       </div>` : '';
 
-    return `<div data-search="${b.barName} ${b.area} ${(rates.__entity__||'SAGA GYPSY BEER PROJECT')}" style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">
+    return `<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;cursor:pointer"
         onclick="rcExpandedBar=rcExpandedBar===${b.id}?null:${b.id};rcEditBarId=null;renderPage()">
         <div style="flex:1">
@@ -7527,17 +7521,21 @@ function pageRateCard() {
     </div>`;
   }).join('') || `<div class="empty">No bars found</div>`;
 
-  setTimeout(() => { if (rcSearch) _filterRows('rc-tbody', rcSearch); }, 0);
   return `
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
       <input id="rc-search-inp" class="inp" placeholder="Search bar or invoicing entity…" value="${rcSearch}"
-        oninput="rcSearch=this.value;setRcSearch(this.value);setTimeout(()=>{const el=document.getElementById('rc-search-inp');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},0)" style="width:300px">
-      <span id="rc-count" style="font-size:12px;color:var(--muted)">${activeBars.length} bars</span>
+        oninput="rcSearch=this.value;renderPage();refocusRcSearch()" style="width:300px">
+      <span id="rc-count" style="font-size:12px;color:var(--muted)">${q ? activeBars.length+' of '+allActiveBars.length : allActiveBars.length} bars</span>
       <div style="font-size:12px;color:var(--muted);margin-left:auto">
         MRP fixed at <b>₹${MRP_PER_LITRE}/litre</b> · Service = Total − MRP
       </div>
     </div>
     <div id="rc-tbody">${rows}</div>`;
+}
+
+function refocusRcSearch() {
+  const el = document.getElementById('rc-search-inp');
+  if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
 }
 
 function setRate(barId, beerCode, field, value) {
