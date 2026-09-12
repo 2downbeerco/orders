@@ -7527,6 +7527,7 @@ function pageRateCard() {
     </div>`;
   }).join('') || `<div class="empty">No bars found</div>`;
 
+  setTimeout(() => { if (rcSearch) _filterRows('rc-tbody', rcSearch); }, 0);
   return `
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
       <input id="rc-search-inp" class="inp" placeholder="Search bar or invoicing entity…" value="${rcSearch}"
@@ -7537,7 +7538,6 @@ function pageRateCard() {
       </div>
     </div>
     <div id="rc-tbody">${rows}</div>`;
-  setTimeout(() => { if (rcSearch) _filterRows('rc-tbody', rcSearch); }, 0);
 }
 
 function setRate(barId, beerCode, field, value) {
