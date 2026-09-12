@@ -3204,14 +3204,17 @@ function setOrdersSearch(v) {
 }
 function setKegsSearch(v) {
   kegsSearch = v;
+  if (!v) { renderPage(); return; }
   _filterRows('kegs-tbody', v);
 }
 function setBarsSearch(v) {
   barsSearch = v;
+  if (!v) { renderPage(); return; }
   _filterRows('bars-tbody', v);
 }
 function setRcSearch(v) {
   rcSearch = v;
+  if (!v) { renderPage(); return; }
   _filterRows('rc-tbody', v);
   // Update counter
   const container = document.getElementById('rc-tbody');
