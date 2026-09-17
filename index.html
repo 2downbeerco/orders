@@ -7252,12 +7252,16 @@ function computeMonthlyReport(monthValue) {
   const stockEnd = {};
   BEERS.forEach(b => { stockEnd[b.code]=0; });
 
-  // Ready portion: every batch that existed by month end (known brewDate
-  // before next month, or no brewDate at all — see note above on why
-  // undated batches are still counted), minus shipments matching that
-  // exact batch, up to month end.
+  // Ready portion: every ACTIVE batch that existed by month end (known
+  // brewDate before next month, or no brewDate at all — see note above on
+  // why undated batches are still counted), minus shipments matching that
+  // exact batch, up to month end. Inactive batches are skipped entirely —
+  // "inactive" is bar order's own authoritative signal that a batch is
+  // fully consumed/retired, and old shipment records can be imprecise
+  // enough that the total-minus-shipped math alone sometimes computes a
+  // small non-zero "remaining" for a batch that's actually long done.
   breweryBeers.forEach(bb => {
-    if (!bb.beer || !(bb.beer in stockEnd)) return;
+    if (!bb.beer || !(bb.beer in stockEnd) || bb.inactive) return;
     if (bb.brewDate && bb.brewDate >= nextMonth) return; // didn't exist yet by month end
     const totalForBatch = Number(bb.totalLitres != null ? bb.totalLitres : bb.litres) || 0;
     const shippedForBatch = shipmentEvents
@@ -7307,7 +7311,7 @@ function renderMonthlyReport() {
   const totalStock = rows.reduce((s,[,r])=>s+r.stockEnd,0);
 
   document.getElementById('mrpt-results').innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}<br><span style="font-size:11px">Litres Brewed and Stock at Month End both include beer still in progress (fermenting/conditioning/carbonating). For past months, the in-progress portion reflects only what's <em>still</em> in progress today — if something has since finished, it's counted as ready instead, which can slightly understate how much was actually in progress at that specific past date.</span></div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${monthLabel}<br><span style="font-size:11px">Litres Brewed and Stock at Month End both include beer still in progress (fermenting/conditioning/carbonating). For past months, the in-progress portion reflects only what's <em>still</em> in progress today — if something has since finished, it's counted as ready instead. Stock at Month End also only counts batches that are still active today — if a batch has since been marked consumed, it's excluded even from a past month's total. Both of these can slightly understate a past month's true figures if things have moved on since.</span></div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Beer</th><th>Litres Brewed</th><th>Litres Shipped</th><th>Stock at Month End</th></tr></thead>
       <tbody>${tableRows}</tbody>
