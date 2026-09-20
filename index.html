@@ -282,6 +282,7 @@ const BARS = [
   {id:73,barName:"We Idliwale Barroom",entity:"Medium Raw Hospitality Pvt Ltd",area:"Balewadi",licNo:"3433",licType:"FL3"},
   {id:74,barName:"Sammy Sosa Malad",entity:"Samvirat Properties (Sammy Sosa Malad)",area:"Malad",licNo:"2185",licType:"FL3"},
   {id:75,barName:"The Irish House Andheri",entity:"The Irish House Food & Brew Pvt Ltd",area:"Andheri West",licNo:"",licType:"FL3"},
+  {id:90,barName:"Events",entity:"",area:"",licNo:"",licType:"",isEvent:true},
 ];
 
 const BEERS_SEED = [
@@ -2952,6 +2953,7 @@ async function loadData() {
   }} catch(_){}
   try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
+  try { const pm = localStorage.getItem('2down_patel_monthly'); if (pm) patelMonthlyService = JSON.parse(pm); } catch(_){}
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
   try { const fo = localStorage.getItem('2down_fieldops_reports'); if (fo) fieldOpsReports = JSON.parse(fo); } catch(_){}
   try { const fn = localStorage.getItem('2down_fieldops_newbar'); if (fn) fieldOpsNewBarReports = JSON.parse(fn); } catch(_){}
@@ -3000,8 +3002,9 @@ async function loadData() {
     const blRow   = remoteKegs.find(k => k && k.beers);
     const rcRow   = remoteKegs.find(k => k && k.rateCard);
     const invRow  = remoteKegs.find(k => k && k.invData);
+    const pmRow   = remoteKegs.find(k => k && k.patelMonthly);
     // Filter valid keg rows — must have kegNo and size, no special data fields
-    const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports);
+    const kegRows = remoteKegs.filter(k => k && k.kegNo && k.size && !k.breweryBeers && !k.kegHistory && !k.beers && !k.rateCard && !k.invData && !k.activityLog && !k.fieldOpsReports && !k.patelMonthly);
 
     const alRow  = remoteKegs.find(k => k && k.activityLog);
     const foRow  = remoteKegs.find(k => k && k.fieldOpsReports);
@@ -3017,6 +3020,7 @@ async function loadData() {
     }
     if (rcRow)  { rateCard        = rcRow.rateCard;         localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
     if (invRow) { invData         = invRow.invData;         localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
+    if (pmRow)  { patelMonthlyService = pmRow.patelMonthly; localStorage.setItem('2down_patel_monthly', JSON.stringify(patelMonthlyService)); }
     if (alRow)  { activityLog     = alRow.activityLog;      localStorage.setItem('2down_activity_log',  JSON.stringify(activityLog)); }
     if (foRow)  { fieldOpsReports = foRow.fieldOpsReports;  localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports)); }
     const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
@@ -3181,6 +3185,14 @@ function showToast() {
 
 // Strip trailing bracketed text from entity names e.g. "Iris Hospitality (Bonobo)" -> "Iris Hospitality"
 function cleanEntity(e) { return (e||'').replace(/\s*\(.*?\)\s*$/, '').trim(); }
+
+// Display label for an order's bar — for Events, includes the specific event name
+// so different one-off events (which all share the same "Events" bar record) are
+// distinguishable in lists, keg locations, TP documents, etc.
+function orderBarLabel(bar, order) {
+  if (bar && bar.isEvent) return `Events – ${(order && order.eventName) ? order.eventName : 'Unnamed Event'}`;
+  return bar ? bar.barName : 'Unknown';
+}
 
 // ── Utils ─────────────────────────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -3751,7 +3763,8 @@ function pageFieldOps() {
 
   // Step 1: Bar selection with search
   // Always render ALL bars — search filters in place without re-rendering
-  const activeBars = bars.filter(b=>b&&b.id&&!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
+  // (Events excluded — field visits / pricing checks don't apply to one-off events)
+  const activeBars = bars.filter(b=>b&&b.id&&!b.inactive&&!b.isEvent).sort((a,b)=>a.barName.localeCompare(b.barName));
   const opts = activeBars.map(b=>`
     <label data-search="${b.barName.toLowerCase()} ${(b.area||'').toLowerCase()}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px;width:100%;box-sizing:border-box;min-width:0"
       onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
@@ -4363,9 +4376,10 @@ function pageDashboard() {
               const kegs = countKegs(o);
               const litres = countLitres(o);
               const items = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+              const eventTag = bar.isEvent ? `<b>${o.eventName||'Unnamed Event'}</b> · ` : '';
               return `<div style="display:flex;gap:16px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hover)">
                 <span style="color:var(--muted);min-width:90px">${fmtDate(o.deliveryDate)}</span>
-                <span style="flex:1;color:var(--text)">${items}</span>
+                <span style="flex:1;color:var(--text)">${eventTag}${items}</span>
                 <span style="font-weight:600;color:var(--orange)">${kegs} keg${kegs!==1?'s':''}${litres?' · '+litres+'L':''}</span>
               </div>`;
             }).join('');
@@ -4692,11 +4706,11 @@ function pageOrders() {
       </tr>`;
     }
 
-    return `<tr data-search="${b.barName} ${b.area}" style="cursor:pointer;${isExpanded?'background:var(--accent-bg);':''};border-bottom:${isExpanded?'none':''}">
+    return `<tr data-search="${orderBarLabel(b,o)} ${b.area}" style="cursor:pointer;${isExpanded?'background:var(--accent-bg);':''};border-bottom:${isExpanded?'none':''}">
       <td class="sticky-col" onclick="toggleOrderExpand('${o.id}')">
-        <div style="font-weight:600">${b.barName}</div>
-        ${b.entity?`<div style="font-size:11px;color:var(--muted);margin-top:1px">${cleanEntity(b.entity)}</div>`:''}
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}${b.licType?` · ${badge(b.licType,'#58A6FF')}${b.licNo?`<span style="font-size:10px;color:var(--muted);margin-left:3px">#${b.licNo}</span>`:''}`:''}</div>
+        <div style="font-weight:600">${orderBarLabel(b,o)}</div>
+        ${(!b.isEvent && b.entity)?`<div style="font-size:11px;color:var(--muted);margin-top:1px">${cleanEntity(b.entity)}</div>`:''}
+        ${!b.isEvent?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${b.area}${b.licType?` · ${badge(b.licType,'#58A6FF')}${b.licNo?`<span style="font-size:10px;color:var(--muted);margin-left:3px">#${b.licNo}</span>`:''}`:''}</div>`:''}
       </td>
       <td style="font-size:12px" onclick="toggleOrderExpand('${o.id}')">${fmtDate(o.deliveryDate)}</td>
       <td style="font-size:12px" onclick="toggleOrderExpand('${o.id}')">${itemBadges}</td>
@@ -4792,15 +4806,16 @@ function doPrintOrders() {
     .sort((a,b) => {
       const ba = bars.find(x=>x.id===a.barId)||{barName:''};
       const bb = bars.find(x=>x.id===b.barId)||{barName:''};
-      return ba.barName.localeCompare(bb.barName);
+      return orderBarLabel(ba,a).localeCompare(orderBarLabel(bb,b));
     });
 
   const tableRows = filtered.map(o=>{
     const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown',area:'',entity:'',licType:'',licNo:''};
     const totOrder = (o.items||[]).reduce((s,i)=>s+i.qty,0);
-    const entityName = b.entity ? b.entity.replace(/\s*\(.*?\)\s*/g,'').trim() : b.barName;
+    const label = orderBarLabel(b,o);
+    const entityName = (!b.isEvent && b.entity) ? b.entity.replace(/\s*\(.*?\)\s*/g,'').trim() : label;
     return `<tr>
-      <td style="font-weight:600">${entityName}<br><span style="font-weight:400;font-size:11px;color:#666">${b.barName}</span></td>
+      <td style="font-weight:600">${entityName}<br><span style="font-weight:400;font-size:11px;color:#666">${label}</span></td>
       <td>${b.area||'—'}</td>
       <td style="text-align:center;font-weight:700">${o.tpTotal||'—'}</td>
       <td style="text-align:center">${b.licType||'—'}${b.licNo?` #${b.licNo}`:''}</td>
@@ -4986,7 +5001,7 @@ function commitKegAssign(orderId, pKey) {
   });
 
   const bar = bars.find(b=>b.id===o.barId);
-  k.location = bar ? bar.barName : 'Dispatched';
+  k.location = bar ? orderBarLabel(bar,o) : 'Dispatched';
   k.beer = primaryFill.batch ? `${primaryFill.beer}${primaryFill.batch}` : primaryFill.beer;
 
   // Clear any previous dispatch history for this keg+order before logging
@@ -5219,15 +5234,22 @@ function toggleOrderExpand(id) {
 }
 
 // ── New Order ─────────────────────────────────────────────────────────────
-let newOrderState = { barId:'', barInputVal:'', deliveryDate:today(), tpTotal:'', items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}], notes:'' };
+let newOrderState = { barId:'', barInputVal:'', deliveryDate:today(), tpTotal:'', items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}], notes:'', eventName:'' };
 let editOrderId = null;
 
 function pageNewOrder() {
   const activeBars = bars.filter(b=>b&&b.id&&!b.inactive).sort((a,b)=>a.barName.localeCompare(b.barName));
   const barDatalist = activeBars.map(b=>`<option value="${b.barName} (${b.area})">${b.barName} (${b.area})</option>`).join('');
   const selectedBar = newOrderState.barId ? bars.find(x=>x.id==newOrderState.barId) : null;
-  const barInfo = selectedBar
+  const barInfo = selectedBar && !selectedBar.isEvent
     ? `<div class="info-box"><b style="color:var(--text)">${cleanEntity(selectedBar.entity)}</b><br>${selectedBar.area} · Lic #${selectedBar.licNo} (${selectedBar.licType})</div>`
+    : '';
+  const eventNameField = selectedBar && selectedBar.isEvent
+    ? `<div style="margin-top:10px">
+        <label class="lbl">Event Name *</label>
+        <input class="inp" placeholder="e.g. Jio Oktoberfest" value="${(newOrderState.eventName||'').replace(/"/g,'&quot;')}"
+          oninput="newOrderState.eventName=this.value">
+      </div>`
     : '';
 
   const itemRows = newOrderState.items.map((item,i)=>`
@@ -5272,12 +5294,13 @@ function pageNewOrder() {
             <div style="position:relative">
               <input id="bar-search-inp" class="inp" autocomplete="off"
                 placeholder="Type bar name…"
-                value="${selectedBar ? selectedBar.barName + ' (' + selectedBar.area + ')' : newOrderState.barInputVal||''}"
+                value="${selectedBar ? (selectedBar.area ? selectedBar.barName + ' (' + selectedBar.area + ')' : selectedBar.barName) : newOrderState.barInputVal||''}"
                 oninput="filterBarSuggestions(this.value)"
                 onkeydown="if(event.key==='Escape')closeBarSuggestions()">
               <div id="bar-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:200;max-height:260px;overflow-y:auto"></div>
             </div>
             ${barInfo}
+            ${eventNameField}
           </div>
           <div>
             <label class="lbl">Delivery Date *</label>
@@ -5329,7 +5352,8 @@ function editOrder(id) {
     deliveryDate: o.deliveryDate,
     tpTotal: o.tpTotal||'',
     items: o.items.map(i=>({...i})),
-    notes: o.notes||''
+    notes: o.notes||'',
+    eventName: o.eventName||''
   };
   goTo('new-order');
 }
@@ -5401,7 +5425,7 @@ function selectBarSuggestion(barId) {
   const b = bars.find(x => x.id === barId);
   if (!b) return;
   newOrderState.barId = String(barId);
-  newOrderState.barInputVal = b.barName + ' (' + b.area + ')';
+  newOrderState.barInputVal = b.area ? b.barName + ' (' + b.area + ')' : b.barName;
   closeBarSuggestions();
   renderPage();
 }
@@ -5428,13 +5452,19 @@ function selectBarFromInput(val) {
 
 function cancelOrderEdit() {
   editOrderId = null;
-  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',tpOverride:false,items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
+  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',tpOverride:false,items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:'',eventName:''};
   goTo('new-order');
 }
 
 function submitOrder(btn) {
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   if (!newOrderState.barId) { alert('Please select a bar from the list.'); if(btn){btn.disabled=false;btn.style.opacity='1';} return; }
+  const selBar = bars.find(x=>x.id==newOrderState.barId);
+  if (selBar && selBar.isEvent && !(newOrderState.eventName||'').trim()) {
+    alert('Please enter the event name.');
+    if(btn){btn.disabled=false;btn.style.opacity='1';}
+    return;
+  }
   const dateYear = new Date(newOrderState.deliveryDate).getFullYear();
   if (!newOrderState.deliveryDate || dateYear < 2019 || dateYear > 2099) {
     alert('Please enter a valid delivery date.');
@@ -5456,6 +5486,7 @@ function submitOrder(btn) {
     tpTotal: tp,
     items: newOrderState.items.map(i=>({...i,size:Number(i.size),qty:Number(i.qty)})),
     notes: newOrderState.notes,
+    eventName: (selBar && selBar.isEvent) ? (newOrderState.eventName||'').trim() : '',
     status: existing ? existing.status : 'pending',
     createdAt: existing ? existing.createdAt : new Date().toISOString(),
     // Preserve existing keg assignments (and their fills, needed to reverse
@@ -5467,14 +5498,14 @@ function submitOrder(btn) {
   const barForLog = bars.find(x=>x.id===Number(newOrderState.barId));
   if (editOrderId) {
     orders = orders.map(o=>o.id===editOrderId?order:o);
-    logActivity('Order Edited', `${barForLog?.barName||'Unknown'} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
+    logActivity('Order Edited', `${orderBarLabel(barForLog,order)} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
   } else {
     orders.push(order);
-    logActivity('Order Created', `${barForLog?.barName||'Unknown'} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
+    logActivity('Order Created', `${orderBarLabel(barForLog,order)} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
   }
   saveOrders();
   editOrderId = null;
-  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:''};
+  newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:'',eventName:''};
   showToast();
   _renderPage();
 }
@@ -5541,9 +5572,9 @@ function pageKegging() {
     <th style="font-size:9px;padding-top:2px">50L</th>`).join('');
 
   const detailRows = filtered.slice().sort((a,b)=>{
-    const na = (bars.find(x=>x.id===a.barId)||{barName:'?'}).barName;
-    const nb = (bars.find(x=>x.id===b.barId)||{barName:'?'}).barName;
-    return na.localeCompare(nb);
+    const ba = bars.find(x=>x.id===a.barId)||{barName:'?'};
+    const bb = bars.find(x=>x.id===b.barId)||{barName:'?'};
+    return orderBarLabel(ba,a).localeCompare(orderBarLabel(bb,b));
   }).map(o=>{
     const b = bars.find(x=>x.id===o.barId)||{barName:'?',area:''};
     const itemStr = (o.items||[]).map(i=>{
@@ -5553,7 +5584,7 @@ function pageKegging() {
     }).join(' &nbsp;');
     const totalKegs = (o.items||[]).reduce((s,i)=>s+i.qty,0);
     return `<tr>
-      <td style="font-weight:600">${b.barName}</td>
+      <td style="font-weight:600">${orderBarLabel(b,o)}</td>
       <td style="font-size:13px;color:var(--muted)">${itemStr}</td>
       <td style="text-align:center;font-weight:700;color:var(--accent)">${totalKegs}</td>
     </tr>`;
@@ -5610,7 +5641,7 @@ async function assignKeg(orderId, kegNo, beerBatch) {
 
   o.assignedKegs.push({ kegNo, beer: beerCode, batch: batch||'', kegSize: k.size });
   const bar = bars.find(b=>b.id===o.barId);
-  k.location = bar ? bar.barName : 'Dispatched';
+  k.location = bar ? orderBarLabel(bar,o) : 'Dispatched';
   k.beer = beerCode;
   logKegEvent(kegNo, 'Dispatched', { beer: beerCode, batch: batch||'', location: k.location, deliveryDate: o.deliveryDate, orderId: o.id });
   await saveOrders();
@@ -7422,7 +7453,7 @@ async function saveRateCard() {
 
 function pageRateCard() {
   const q = (rcSearch||'').toLowerCase();
-  const allActiveBars = bars.filter(b => !b.inactive)
+  const allActiveBars = bars.filter(b => !b.inactive && !b.isEvent)
     .sort((a,b) => a.barName.localeCompare(b.barName));
   const activeBars = q
     ? allActiveBars.filter(b => {
@@ -7577,10 +7608,12 @@ function saveRateCardBar(barId) {
 }
 
 // ── Invoicing ─────────────────────────────────────────────────────────────
-// invData: { orderId: { mrpDiscount, svcDiscount } }
+// invData: { orderId: { mrpDiscount, svcDiscount, mrpManual, svcManual } }
+// mrpManual/svcManual are used for Events orders, which have no rate-card-driven
+// gross amount to discount from — the invoicer types the final figures directly.
 let invData = {};
 let invWeekOffset = 0;
-let invEntityTab = 'SAGA'; // 'SAGA', 'TWODOWN', or 'PERBAR'
+let invEntityTab = 'SAGA'; // 'SAGA', 'TWODOWN', 'PERBAR', 'PATEL', or 'EVENTS'
 let invPerBarExpanded = null;
 let invView = 'week'; // 'week' or 'month' — shared across all tabs
 let invMonthOffset = 0;
@@ -7588,6 +7621,26 @@ let invMonthOffset = 0;
 async function saveInvData() {
   localStorage.setItem('2down_inv_data', JSON.stringify(invData));
   try { await sbUpsert('kegs', '__inv_data__', { invData }); } catch(_) {}
+}
+
+// Patel Provision Stores: service amount is entered manually, split into two
+// half-month periods (1st–15th and 16th–end of month), keyed by "YYYY-MM".
+// { "2026-09": { h1: 5000, h2: 6200 } }
+let patelMonthlyService = {};
+
+async function savePatelMonthlyService() {
+  localStorage.setItem('2down_patel_monthly', JSON.stringify(patelMonthlyService));
+  try { await sbUpsert('kegs', '__patel_monthly__', { patelMonthly: patelMonthlyService }); } catch(_) {}
+}
+
+function savePatelHalf(monthKey, half, btn) {
+  const inp = document.querySelector(`input[data-patel-${half}="${monthKey}"]`);
+  if (!inp) return;
+  if (!patelMonthlyService[monthKey]) patelMonthlyService[monthKey] = {};
+  patelMonthlyService[monthKey][half] = Number(inp.value)||0;
+  savePatelMonthlyService();
+  if (btn) { const orig=btn.textContent; btn.textContent='Saved ✓'; setTimeout(()=>{btn.textContent=orig;},1200); }
+  else _renderPage();
 }
 
 function pageInvoicing() {
@@ -7646,7 +7699,7 @@ function pageInvoicing() {
        <button class="btn btn-ghost" onclick="invMonthOffset++;_renderPage()" style="padding:6px 12px;font-size:16px;${isCurrentMonth?'opacity:0.3;cursor:default':''}">&#8250;</button>
        ${!isCurrentMonth?`<button class="btn btn-ghost btn-sm" onclick="invMonthOffset=0;_renderPage()">This Month</button>`:''}`;
 
-  // Filter orders by period, exclude Patel
+  // Filter orders by period, exclude Patel & Events (each has its own dedicated tab below)
   const allInvOrders = [...orders, ...HISTORICAL_ORDERS];
   const filteredOrders = allInvOrders.filter(o=>{
     const d = new Date(o.deliveryDate);
@@ -7654,6 +7707,7 @@ function pageInvoicing() {
     if (!inPeriod) return false;
     const b = bars.find(x=>x.id===o.barId)||{barName:''};
     if (b.barName.toLowerCase().includes('patel provision')) return false;
+    if (b.isEvent) return false;
     return true;
   }).sort((a,b)=>{
     const ta = a.createdAt||a.deliveryDate||'';
@@ -7663,18 +7717,30 @@ function pageInvoicing() {
 
   // Entity tabs
   const entityTabBar = `
-    <div style="display:flex;gap:2px;background:var(--hover);border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px">
+    <div style="display:flex;gap:2px;background:var(--hover);border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-sm ${invEntityTab==='SAGA'?'btn-primary':'btn-ghost'}"
         onclick="invEntityTab='SAGA';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">SAGA GYPSY</button>
       <button class="btn btn-sm ${invEntityTab==='TWODOWN'?'btn-primary':'btn-ghost'}"
         onclick="invEntityTab='TWODOWN';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">TWO DOWN</button>
       <button class="btn btn-sm ${invEntityTab==='PERBAR'?'btn-primary':'btn-ghost'}"
         onclick="invEntityTab='PERBAR';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Per Bar</button>
+      <button class="btn btn-sm ${invEntityTab==='PATEL'?'btn-primary':'btn-ghost'}"
+        onclick="invEntityTab='PATEL';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Patel Provision Stores</button>
+      <button class="btn btn-sm ${invEntityTab==='EVENTS'?'btn-primary':'btn-ghost'}"
+        onclick="invEntityTab='EVENTS';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Events</button>
     </div>`;
 
   // Route to Per-Bar view
   if (invEntityTab === 'PERBAR') {
     return renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, filteredOrders, entityTabBar, viewToggle, periodNav, monthLabel, isCurrentMonth);
+  }
+  // Route to Patel Provision Stores view
+  if (invEntityTab === 'PATEL') {
+    return renderInvPatel(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStart, mEnd, selDate, weekLabel, monthLabel);
+  }
+  // Route to Events view
+  if (invEntityTab === 'EVENTS') {
+    return renderInvEvents(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStart, mEnd, weekLabel, monthLabel);
   }
 
   const tabOrders = filteredOrders.filter(o => {
@@ -7851,6 +7917,216 @@ function pageInvoicing() {
     </div>`;
 }
 
+// ── Patel Provision Stores ───────────────────────────────────────────────
+// Week view: MRP is calculated automatically (same formula as every other
+// bar); no service figure is shown for a week — Patel's service amount is
+// only ever entered per half-month (see below).
+// Month view: MRP is still calculated automatically (summed across the whole
+// month), but the Service amount is typed in manually as two entries — one
+// for the 1st–15th, one for the 16th to the end of the month (28th/29th/30th/31st,
+// whichever applies).
+function renderInvPatel(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStart, mEnd, selDate, weekLabel, monthLabel) {
+  const patelBar = bars.find(b => (b.barName||'').toLowerCase().includes('patel provision')) || {id:-1,barName:'Patel Provision Stores'};
+  const allPatelOrders = [...orders, ...HISTORICAL_ORDERS].filter(o => o.barId === patelBar.id);
+  const fmt2 = n => n.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  const periodOrders = (invView === 'week'
+    ? allPatelOrders.filter(o => { const d = new Date(o.deliveryDate); return d >= wStart && d < wEnd; })
+    : allPatelOrders.filter(o => { const d = new Date(o.deliveryDate); return d >= mStart && d < mEnd; })
+  ).sort((a,b) => a.deliveryDate.localeCompare(b.deliveryDate));
+
+  const orderRows = periodOrders.map(o => {
+    const hist = HISTORICAL_INV_DATA[o.id];
+    const totalLitres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+    const mrpAmount = hist ? (hist.mrpAmount||0) : Math.ceil(MRP_PER_LITRE * 1.02 * totalLitres);
+    const itemSummary = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+    return { mrpAmount, row: `<tr>
+      <td>
+        <div style="font-weight:600">${fmtDate(o.deliveryDate)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${itemSummary}</div>
+      </td>
+      <td style="font-family:monospace;font-size:13px;text-align:right">${totalLitres}L</td>
+      <td style="font-family:monospace;font-size:13px;font-weight:700;text-align:right">₹${mrpAmount.toLocaleString('en-IN')}</td>
+    </tr>` };
+  });
+  const totalMrp = orderRows.reduce((s,r)=>s+r.mrpAmount, 0);
+
+  // Half-month service entries — month view only
+  let monthKey = '', h1 = 0, h2 = 0, halfMonthBlock = '', grandTotal = totalMrp;
+  if (invView === 'month') {
+    const y = selDate.getFullYear(), m = selDate.getMonth();
+    monthKey = `${y}-${String(m+1).padStart(2,'0')}`;
+    const daysInMonth = new Date(y, m+1, 0).getDate();
+    const saved = patelMonthlyService[monthKey] || {};
+    h1 = Number(saved.h1)||0;
+    h2 = Number(saved.h2)||0;
+    grandTotal = totalMrp + h1 + h2;
+    halfMonthBlock = `
+      <div class="card" style="margin-top:16px">
+        <div class="section-title">Service Amount — entered manually per half-month</div>
+        <div class="grid2" style="gap:16px">
+          <div>
+            <label class="lbl">1 – 15 ${monthLabel}</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" min="0" class="inp" style="width:140px" placeholder="0"
+                value="${h1||''}" data-patel-h1="${monthKey}">
+              <button class="btn btn-primary btn-sm" onclick="savePatelHalf('${monthKey}','h1',this)">Save</button>
+            </div>
+          </div>
+          <div>
+            <label class="lbl">16 – ${daysInMonth} ${monthLabel}</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" min="0" class="inp" style="width:140px" placeholder="0"
+                value="${h2||''}" data-patel-h2="${monthKey}">
+              <button class="btn btn-primary btn-sm" onclick="savePatelHalf('${monthKey}','h2',this)">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const periodLabel = invView === 'week' ? weekLabel : monthLabel;
+
+  return `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      ${periodNav}
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        ${viewToggle}
+        <span style="font-size:12px;color:var(--muted)">MRP = roundup(₹134.4 × 1.02 × litres)</span>
+      </div>
+    </div>
+    ${entityTabBar}
+    <div style="display:grid;grid-template-columns:${invView==='month'?'repeat(4,1fr)':'repeat(2,1fr)'};gap:12px;margin-bottom:20px;max-width:${invView==='month'?'100%':'500px'}">
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
+        <div style="font-size:20px;font-weight:700">₹${totalMrp.toLocaleString('en-IN')}</div>
+      </div>
+      ${invView==='month' ? `
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Service (1–15)</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2(h1)}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Service (16–end)</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2(h2)}</div>
+      </div>` : ''}
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2(grandTotal)}</div>
+      </div>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Delivery</th>
+            <th style="text-align:right">Litres</th>
+            <th style="text-align:right">MRP Amount</th>
+          </tr></thead>
+          <tbody>${orderRows.map(r=>r.row).join('') || `<tr><td colspan="3" class="empty">No orders for this ${invView}</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+    ${halfMonthBlock}`;
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+// Both MRP and Service amounts are entered manually per event order — each
+// event tends to have its own one-off pricing, so no formula/rate card applies.
+function renderInvEvents(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStart, mEnd, weekLabel, monthLabel) {
+  const allEventOrders = [...orders, ...HISTORICAL_ORDERS].filter(o => {
+    const b = bars.find(x=>x.id===o.barId);
+    return b && b.isEvent;
+  });
+  const fmt2 = n => n.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  const periodOrders = (invView === 'week'
+    ? allEventOrders.filter(o => { const d = new Date(o.deliveryDate); return d >= wStart && d < wEnd; })
+    : allEventOrders.filter(o => { const d = new Date(o.deliveryDate); return d >= mStart && d < mEnd; })
+  ).sort((a,b) => a.deliveryDate.localeCompare(b.deliveryDate));
+
+  const rows = periodOrders.map(o => {
+    const b = bars.find(x=>x.id===o.barId);
+    const inv = invData[o.id] || {};
+    const mrpManual = Number(inv.mrpManual)||0;
+    const svcManual = Number(inv.svcManual)||0;
+    const itemSummary = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+    return `<tr>
+      <td>
+        <div style="font-weight:600">${o.eventName||'Unnamed Event'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtDate(o.deliveryDate)} · ${itemSummary}</div>
+      </td>
+      <td style="text-align:right">
+        <input type="number" min="0" class="inp" style="width:110px;font-size:12px;padding:4px 8px;text-align:right"
+          value="${mrpManual||''}" placeholder="0" data-inv-mrpmanual="${o.id}">
+      </td>
+      <td style="text-align:right">
+        <input type="number" min="0" class="inp" style="width:110px;font-size:12px;padding:4px 8px;text-align:right"
+          value="${svcManual||''}" placeholder="0" data-inv-svcmanual="${o.id}">
+      </td>
+      <td>
+        <button class="btn btn-primary btn-sm" onclick="saveInvEventRow('${o.id}')">Save</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  let totalMrp = 0, totalSvc = 0;
+  periodOrders.forEach(o => {
+    const inv = invData[o.id]||{};
+    totalMrp += Number(inv.mrpManual)||0;
+    totalSvc += Number(inv.svcManual)||0;
+  });
+
+  const periodLabel = invView === 'week' ? weekLabel : monthLabel;
+
+  return `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      ${periodNav}
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        ${viewToggle}
+        <span style="font-size:12px;color:var(--muted)">MRP & Service entered manually per event</span>
+      </div>
+    </div>
+    ${entityTabBar}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;max-width:700px">
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2(totalMrp)}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Service Total</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2(totalSvc)}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2(totalMrp+totalSvc)}</div>
+      </div>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Event / Order</th>
+            <th style="text-align:right">MRP Amount</th>
+            <th style="text-align:right">Service Amount</th>
+            <th></th>
+          </tr></thead>
+          <tbody>${rows || `<tr><td colspan="4" class="empty">No event orders for this ${invView}</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function saveInvEventRow(orderId) {
+  const mrpInp = document.querySelector(`input[data-inv-mrpmanual="${orderId}"]`);
+  const svcInp = document.querySelector(`input[data-inv-svcmanual="${orderId}"]`);
+  if (!invData[orderId]) invData[orderId] = {};
+  if (mrpInp) invData[orderId].mrpManual = Number(mrpInp.value)||0;
+  if (svcInp) invData[orderId].svcManual = Number(svcInp.value)||0;
+  saveInvData();
+  _renderPage();
+}
+
 function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entityTabBar, viewToggle, periodNav, monthLabel, isCurrentMonth) {
   const now = new Date();
 
@@ -8023,14 +8299,16 @@ let editBarId = null;
 let editBarData = {};
 
 function pageBars() {
-  const activeBars   = bars.filter(b=>b&&b.id&&!b.inactive);
-  const inactiveBars = bars.filter(b=>b.inactive);
+  // Events is a system placeholder bar (see New Order), not a real venue —
+  // keep it out of the bar registry so it can't be accidentally edited/deleted.
+  const activeBars   = bars.filter(b=>b&&b.id&&!b.inactive&&!b.isEvent);
+  const inactiveBars = bars.filter(b=>b.inactive&&!b.isEvent);
 
   const searchFn = b =>
     b.barName.toLowerCase().includes(barsSearch.toLowerCase()) ||
     (b.area||'').toLowerCase().includes(barsSearch.toLowerCase());
 
-  const filtered = (showInactive ? bars : activeBars).filter(searchFn).sort((a,b)=>a.barName.localeCompare(b.barName));
+  const filtered = (showInactive ? bars.filter(b=>!b.isEvent) : activeBars).filter(searchFn).sort((a,b)=>a.barName.localeCompare(b.barName));
 
   const allFilteredIds = filtered.map(b=>b.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id=>selectedBars.has(id));
@@ -8225,11 +8503,11 @@ function showTP(orderId) {
   const infoRows = [
     ['TP Date', fmtDate(o.createdAt)],
     ['Delivery Date', fmtDate(o.deliveryDate)],
-    ['Consignee (Bar)', b.barName],
+    ['Consignee (Bar)', orderBarLabel(b,o)],
     ['Legal Entity', cleanEntity(b.entity)],
     ['Delivery Area', b.area],
     ['Licence No.', b.licNo||'--'],
-    ['Licence Type', b.licType],
+    ['Licence Type', b.licType||'--'],
   ].map(([k,v])=>`<tr>
     <td style="border:1px solid #ddd;padding:6px 10px;background:#f9f9f9;font-weight:600;width:40%;font-size:12px">${k}</td>
     <td style="border:1px solid #ddd;padding:6px 10px;font-size:13px">${v}</td>
