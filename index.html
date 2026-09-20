@@ -2687,8 +2687,15 @@ async function syncAllData() {
     }
 
     if (remoteBars.length > 0) {
-      if (JSON.stringify(remoteBars) !== JSON.stringify(bars)) {
-        bars = remoteBars;
+      // Merge with seed BARS (same as loadData) so local-only virtual bars
+      // like "Events" — which never get written to Supabase — survive
+      // this periodic background sync instead of being stripped out.
+      const barMap = {};
+      [...BARS].forEach(b => barMap[b.id] = {...b});
+      remoteBars.forEach(b => { if (b && b.id) barMap[b.id] = b; });
+      const mergedBars = Object.values(barMap).sort((a,b) => a.id - b.id);
+      if (JSON.stringify(mergedBars) !== JSON.stringify(bars)) {
+        bars = mergedBars;
         localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
         changed = true;
       }
