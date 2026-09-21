@@ -2953,7 +2953,7 @@ async function loadData() {
   }} catch(_){}
   try { const rc = localStorage.getItem('2down_ratecard'); if (rc) rateCard = JSON.parse(rc); } catch(_){}
   try { const id = localStorage.getItem('2down_inv_data'); if (id) invData = JSON.parse(id); } catch(_){}
-  try { const pm = localStorage.getItem('2down_patel_monthly'); if (pm) patelMonthlyService = JSON.parse(pm); } catch(_){}
+  try { const pm = localStorage.getItem('2down_patel_monthly'); if (pm) patelMonthlyService = {...PATEL_MONTHLY_SEED, ...JSON.parse(pm)}; } catch(_){}
   try { const al = localStorage.getItem('2down_activity_log'); if (al) activityLog = JSON.parse(al); } catch(_){}
   try { const fo = localStorage.getItem('2down_fieldops_reports'); if (fo) fieldOpsReports = JSON.parse(fo); } catch(_){}
   try { const fn = localStorage.getItem('2down_fieldops_newbar'); if (fn) fieldOpsNewBarReports = JSON.parse(fn); } catch(_){}
@@ -3020,7 +3020,7 @@ async function loadData() {
     }
     if (rcRow)  { rateCard        = rcRow.rateCard;         localStorage.setItem('2down_ratecard',      JSON.stringify(rateCard)); }
     if (invRow) { invData         = invRow.invData;         localStorage.setItem('2down_inv_data',      JSON.stringify(invData)); }
-    if (pmRow)  { patelMonthlyService = pmRow.patelMonthly; localStorage.setItem('2down_patel_monthly', JSON.stringify(patelMonthlyService)); }
+    if (pmRow)  { patelMonthlyService = {...PATEL_MONTHLY_SEED, ...pmRow.patelMonthly}; localStorage.setItem('2down_patel_monthly', JSON.stringify(patelMonthlyService)); }
     if (alRow)  { activityLog     = alRow.activityLog;      localStorage.setItem('2down_activity_log',  JSON.stringify(activityLog)); }
     if (foRow)  { fieldOpsReports = foRow.fieldOpsReports;  localStorage.setItem('2down_fieldops_reports', JSON.stringify(fieldOpsReports)); }
     const foNewRow = remoteKegs.find(k => k && k.fieldOpsNewBarReports);
@@ -7626,7 +7626,17 @@ async function saveInvData() {
 // Patel Provision Stores: service amount is entered manually, split into two
 // half-month periods (1st–15th and 16th–end of month), keyed by "YYYY-MM".
 // { "2026-09": { h1: 5000, h2: 6200 } }
-let patelMonthlyService = {};
+// Seeded with actual Service Bill invoice amounts from Patel's own tracking
+// sheet (April '26 – August '26); local/remote saved values still take
+// precedence over these once merged in loadData (see PATEL_MONTHLY_SEED merge).
+const PATEL_MONTHLY_SEED = {
+  "2026-04": { h1: 25728.46, h2: 19761.72 },
+  "2026-05": { h1: 18564.35, h2: 29829.01 },
+  "2026-06": { h1: 12383.06, h2: 10931.72 },
+  "2026-07": { h1: 16594.25, h2: 14239.83 },
+  "2026-08": { h1: 16920.67, h2: 1850.54 }
+};
+let patelMonthlyService = {...PATEL_MONTHLY_SEED};
 
 async function savePatelMonthlyService() {
   localStorage.setItem('2down_patel_monthly', JSON.stringify(patelMonthlyService));
