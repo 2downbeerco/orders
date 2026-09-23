@@ -8055,17 +8055,33 @@ function renderInvEvents(entityTabBar, viewToggle, periodNav, wStart, wEnd, mSta
     : allEventOrders.filter(o => { const d = new Date(o.deliveryDate); return d >= mStart && d < mEnd; })
   ).sort((a,b) => a.deliveryDate.localeCompare(b.deliveryDate));
 
+  // Actual litres filled for the event — not the nominal keg size. Historical
+  // orders record the real fill in `actualVol` on each item (falling back to
+  // nominal size when a specific fill wasn't logged); live orders record the
+  // real fill per keg in `assignedKegs[].fills[]` once kegs are assigned.
+  const eventLitres = (o) => {
+    if (o.source === 'historical') {
+      return (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.actualVol||i.size)||0), 0);
+    }
+    if ((o.assignedKegs||[]).length) {
+      return (o.assignedKegs||[]).reduce((s,ak)=>s+(ak.fills||[]).reduce((s2,f)=>s2+(Number(f.litres)||0),0), 0);
+    }
+    return null; // not yet filled/assigned — nothing measured yet
+  };
+
   const rows = periodOrders.map(o => {
     const b = bars.find(x=>x.id===o.barId);
     const inv = invData[o.id] || {};
     const mrpManual = Number(inv.mrpManual)||0;
     const svcManual = Number(inv.svcManual)||0;
     const itemSummary = (o.items||[]).map(i=>`${i.qty}×${i.size}L ${i.beer}`).join(', ');
+    const litres = eventLitres(o);
     return `<tr>
       <td>
         <div style="font-weight:600">${o.eventName||'Unnamed Event'}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtDate(o.deliveryDate)} · ${itemSummary}</div>
       </td>
+      <td style="text-align:right;font-family:monospace;font-size:13px;font-weight:700">${litres!=null?litres.toLocaleString('en-IN',{maximumFractionDigits:1})+'L':'<span style="font-weight:400;color:var(--muted);font-family:inherit">—</span>'}</td>
       <td style="text-align:right">
         <input type="number" min="0" class="inp" style="width:110px;font-size:12px;padding:4px 8px;text-align:right"
           value="${mrpManual||''}" placeholder="0" data-inv-mrpmanual="${o.id}">
@@ -8117,11 +8133,12 @@ function renderInvEvents(entityTabBar, viewToggle, periodNav, wStart, wEnd, mSta
         <table class="tbl">
           <thead><tr>
             <th>Event / Order</th>
+            <th style="text-align:right">Litres Sold</th>
             <th style="text-align:right">MRP Amount</th>
             <th style="text-align:right">Service Amount</th>
             <th></th>
           </tr></thead>
-          <tbody>${rows || `<tr><td colspan="4" class="empty">No event orders for this ${invView}</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="5" class="empty">No event orders for this ${invView}</td></tr>`}</tbody>
         </table>
       </div>
     </div>`;
