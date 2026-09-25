@@ -3125,6 +3125,31 @@ async function saveKegs() {
   }
 }
 
+// Upsert only the kegs actually touched by this action, instead of the
+// whole in-memory `kegs` array. saveKegs() re-pushes every keg's CURRENT
+// local copy — if this browser's copy of some other keg is stale (e.g. a
+// dispatch from another device/tab hasn't synced down here yet), any
+// unrelated keg edit here silently overwrites that other keg's live data
+// on the server with the stale value. This scoped version only touches
+// the keg(s) this action actually changed.
+async function saveKegsSubset(kegNos) {
+  const list = [...new Set(kegNos)].map(no => kegs.find(k => k.kegNo === no)).filter(Boolean);
+  localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
+  if (!list.length) return;
+  _syncLocked++;
+  try {
+    await Promise.all(list.map(k => sbUpsert('kegs', k.kegNo, k)));
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) {
+    setSyncStatus('Saved locally', '#DC2626');
+    console.error('saveKegsSubset failed:', e);
+  } finally {
+    _syncLocked--;
+  }
+}
+function saveKeg(kegNo) { return saveKegsSubset([kegNo]); }
+
 function openAddKegModal() {
   document.getElementById('ak-kegno').value = '';
   document.getElementById('ak-size').value = '50';
@@ -3144,7 +3169,7 @@ function saveNewKeg() {
   if (kegs.find(k=>k.kegNo===kegNo)) { alert('A keg with this number already exists.'); return; }
   kegs.push({ kegNo, size, make: make||'—', location, beer: 'Empty', missing: false });
   closeAddKegModal();
-  saveKegs();
+  saveKeg(kegNo);
   renderPage();
   showToast();
 }
@@ -5022,7 +5047,7 @@ function commitKegAssign(orderId, pKey) {
 
   delete pendingKegFills[pKey];
   saveOrders();
-  saveKegs();
+  saveKeg(pending.kegNo);
   renderPage();
 }
 
@@ -5383,7 +5408,7 @@ async function deleteOrder(id) {
     }
   });
   if (allFillsToRestore.length) { pushBrewRestorations(allFillsToRestore); }
-  saveKegs();
+  saveKegsSubset((o.assignedKegs || []).map(a => a.kegNo));
   saveKegHistory();
 
   logActivity('Order Deleted', `${bar.barName} · ${fmtDate(o.deliveryDate)}`);
@@ -5645,7 +5670,7 @@ async function assignKeg(orderId, kegNo, beerBatch) {
   k.beer = beerCode;
   logKegEvent(kegNo, 'Dispatched', { beer: beerCode, batch: batch||'', location: k.location, deliveryDate: o.deliveryDate, orderId: o.id });
   await saveOrders();
-  await saveKegs();
+  await saveKeg(kegNo);
   renderPage();
 }
 
@@ -5676,7 +5701,7 @@ function unassignKeg(orderId, kegNo) {
   }
 
   saveOrders();
-  saveKegs();
+  saveKeg(kegNo);
   renderPage();
 }
 
@@ -6768,7 +6793,7 @@ async function returnKegs() {
   });
   returnSelected.clear();
   try {
-    await saveKegs();
+    await saveKegsSubset(kegNos);
     logActivity('Kegs Returned', `${kegNos.join(', ')} → Brewery`);
     // Give the fire-and-forget save inside logActivity a moment to start before we release the lock
     await new Promise(r => setTimeout(r, 50));
@@ -6799,7 +6824,7 @@ function updateKegBeer(kegNo, beer) {
   const k = kegs.find(x=>x.kegNo===kegNo);
   if (!k) return;
   k.beer = beer.trim() || 'Empty';
-  saveKegs();
+  saveKeg(kegNo);
 }
 
 function updateKegLocation(kegNo, newLocation) {
@@ -6813,7 +6838,7 @@ function updateKegLocation(kegNo, newLocation) {
   } else {
     logKegEvent(kegNo, 'Location Updated', { location: newLocation, beer: k.beer, from: prevLocation });
   }
-  saveKegs();
+  saveKeg(kegNo);
   renderPage();
 }
 
@@ -6823,7 +6848,7 @@ function toggleMissing(kegNo) {
   k.missing = !k.missing;
   logKegEvent(kegNo, k.missing ? 'Marked Missing' : 'Found', { location: k.location });
   logActivity(k.missing ? 'Keg Marked Missing' : 'Keg Found', `${kegNo} · ${k.location}`);
-  saveKegs();
+  saveKeg(kegNo);
   renderPage();
 }
 
