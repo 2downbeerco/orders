@@ -3094,6 +3094,30 @@ async function saveOrders() {
   }
 }
 
+// Same race as the old saveKegs(): pushing every order this tab has in
+// memory can overwrite a different order someone else just edited, if this
+// tab's copy of it is stale. Use this for actions that only touch one (or a
+// few) specific orders instead of the whole list.
+async function saveOrdersSubset(orderIds) {
+  orders = orders.filter(o => o && o.id != null && o.id !== '');
+  const list = [...new Set(orderIds)].map(id => orders.find(o => String(o.id) === String(id))).filter(Boolean);
+  localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
+  showToast();
+  if (!list.length) return;
+  _syncLocked++;
+  try {
+    await Promise.all(list.map(o => sbUpsert('orders', String(o.id), o)));
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) {
+    setSyncStatus('Saved locally', '#DC2626');
+    console.error('saveOrdersSubset failed:', e);
+  } finally {
+    _syncLocked--;
+  }
+}
+function saveOrder(orderId) { return saveOrdersSubset([orderId]); }
+
 async function saveBars() {
   localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
   showToast();
@@ -3109,6 +3133,26 @@ async function saveBars() {
     _syncLocked--;
   }
 }
+
+// Same race protection as saveOrdersSubset(), for bars.
+async function saveBarsSubset(barIds) {
+  const list = [...new Set(barIds)].map(id => bars.find(b => String(b.id) === String(id))).filter(Boolean);
+  localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
+  showToast();
+  if (!list.length) return;
+  _syncLocked++;
+  try {
+    await Promise.all(list.map(b => sbUpsert('bars', String(b.id), b)));
+    setSyncStatus('Saved', '#16A34A');
+    setTimeout(() => setSyncStatus('', ''), 1500);
+  } catch(e) {
+    setSyncStatus('Saved locally', '#DC2626');
+    console.error('saveBarsSubset failed:', e);
+  } finally {
+    _syncLocked--;
+  }
+}
+function saveBar(barId) { return saveBarsSubset([barId]); }
 
 async function saveKegs() {
   localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
@@ -5046,7 +5090,7 @@ function commitKegAssign(orderId, pKey) {
   pushBrewDeductions(pending.fills);
 
   delete pendingKegFills[pKey];
-  saveOrders();
+  saveOrder(orderId);
   saveKeg(pending.kegNo);
   renderPage();
 }
@@ -5528,7 +5572,7 @@ function submitOrder(btn) {
     orders.push(order);
     logActivity('Order Created', `${orderBarLabel(barForLog,order)} · ${fmtDate(order.deliveryDate)} · ${tp} kegs`);
   }
-  saveOrders();
+  saveOrder(order.id);
   editOrderId = null;
   newOrderState = {barId:'',barInputVal:'',deliveryDate:today(),tpTotal:'',items:[{beer:BEERS[0]?.code||'BB',size:20,qty:1}],notes:'',eventName:''};
   showToast();
@@ -5669,7 +5713,7 @@ async function assignKeg(orderId, kegNo, beerBatch) {
   k.location = bar ? orderBarLabel(bar,o) : 'Dispatched';
   k.beer = beerCode;
   logKegEvent(kegNo, 'Dispatched', { beer: beerCode, batch: batch||'', location: k.location, deliveryDate: o.deliveryDate, orderId: o.id });
-  await saveOrders();
+  await saveOrder(orderId);
   await saveKeg(kegNo);
   renderPage();
 }
@@ -5700,7 +5744,7 @@ function unassignKeg(orderId, kegNo) {
     pushBrewRestorations(assignment.fills);
   }
 
-  saveOrders();
+  saveOrder(orderId);
   saveKeg(kegNo);
   renderPage();
 }
@@ -8491,7 +8535,7 @@ function toggleBarActive(id) {
   const action = b.inactive ? 'reactivate' : 'deactivate';
   if (!confirm(`${action.charAt(0).toUpperCase()+action.slice(1)} "${b.barName}"?\n\n${b.inactive?'They will appear in the New Order dropdown again.':'They will be hidden from new orders but all historical data is preserved.'}`)) return;
   bars = bars.map(x=>x.id===id?{...x,inactive:!x.inactive}:x);
-  saveBars();
+  saveBar(id);
   renderPage();
 }
 
@@ -8500,16 +8544,18 @@ function deactivateSelectedBars() {
   if (!count) return;
   const names = bars.filter(b=>selectedBars.has(b.id)).map(b=>b.barName).join('\n• ');
   if (!confirm(`Deactivate ${count} bar${count!==1?'s':''}?\n\n• ${names}\n\nHistorical orders will be preserved. You can reactivate them anytime.`)) return;
+  const deactivatedIds = [...selectedBars];
   bars = bars.map(b=>selectedBars.has(b.id)?{...b,inactive:true}:b);
   selectedBars.clear();
-  saveBars();
+  saveBarsSubset(deactivatedIds);
   renderPage();
 }
 
 function saveNewBar() {
   if (!newBar.barName) { alert('Bar name is required.'); return; }
-  bars.push({...newBar, id: Date.now(), inactive: false});
-  saveBars();
+  const newBarId = Date.now();
+  bars.push({...newBar, id: newBarId, inactive: false});
+  saveBar(newBarId);
   newBar = {barName:'',entity:'',area:'',licNo:'',licType:'FL3'};
   showAddBar = false;
   renderPage();
@@ -8527,7 +8573,7 @@ function startEditBar(id) {
 function saveEditBar(id) {
   if (!editBarData.barName) { alert('Bar name is required.'); return; }
   bars = bars.map(b=>b.id===id?{...b,...editBarData}:b);
-  saveBars();
+  saveBar(id);
   editBarId = null;
   editBarData = {};
   renderPage();
