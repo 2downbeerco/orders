@@ -5115,6 +5115,7 @@ async function pushBrewDeductions(fills) {
     let inv   = JSON.parse(JSON.stringify(rows.find(r=>r.key==='beerInventory')?.value || []));
     let tanks = JSON.parse(JSON.stringify(rows.find(r=>r.key==='tanks')?.value || []));
 
+    const missedFills = []; // fills that couldn't be matched to anything live — surfaced below
     fills.forEach(f => {
       if (f.source === 'coldroom') {
         const invItem = inv.find(x=>x.beer===f.beer);
@@ -5125,11 +5126,13 @@ async function pushBrewDeductions(fills) {
             if (b.litres <= 0) exhausted.push({ beer: f.beer, batch: f.batch });
           } else {
             console.warn('pushBrewDeductions: batch not found for deduction', f.beer, f.batch, invItem.batches.map(b=>b.batchNo));
+            missedFills.push(f);
           }
           // Remove batches that have been fully dispatched
           invItem.batches = invItem.batches.filter(b => b.litres > 0);
         } else {
           console.warn('pushBrewDeductions: no coldroom inv item found for beer', f.beer);
+          missedFills.push(f);
         }
       } else if (f.source === 'tank' && f.tankId) {
         const tank = tanks.find(t=>String(t.id)===String(f.tankId));
@@ -5151,9 +5154,22 @@ async function pushBrewDeductions(fills) {
             exhausted.push({ beer: f.beer, batch: f.batch });
           }
         }
-        else console.warn('pushBrewDeductions: tank not found', f.tankId);
+        else {
+          console.warn('pushBrewDeductions: tank not found', f.tankId);
+          missedFills.push(f);
+        }
       }
     });
+
+    // A fill that couldn't be matched to anything live means brew ops's
+    // stock was NOT reduced for it — the keg assignment still went through
+    // on the order side, so this failure was otherwise completely silent.
+    // Surface it every time, the same way pushBrewRestorations already does
+    // for its own no-match case.
+    if (missedFills.length) {
+      const desc = missedFills.map(f => `${f.litres}L of ${f.beer} batch ${f.batch}${f.source==='tank' ? ` (tank ${f.tankId||'?'})` : ' (cold room)'}`).join(', ');
+      showSyncError(`Could not deduct ${desc} from the brew ops dashboard — no matching stock found there. Brew ops stock may now be too high; check it manually.`);
+    }
 
     // Remove inv entries with no remaining batches
     inv = inv.filter(x => x.batches && x.batches.length > 0);
