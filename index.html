@@ -5591,7 +5591,11 @@ function submitOrder(btn) {
     // brew ops deductions later) — without this, saving any edit to an
     // order with assigned kegs silently wipes that record and makes the
     // already-deducted stock permanently untraceable.
-    assignedKegs: existing ? (existing.assignedKegs || []) : []
+    assignedKegs: existing ? (existing.assignedKegs || []) : [],
+    // Snapshot which entity invoices this order at creation time — preserved
+    // on edit (never re-stamped) so a later change to the bar's invoicing
+    // entity doesn't retroactively move this order. See orderInvoiceEntity().
+    invoiceEntity: existing ? existing.invoiceEntity : (((rateCard[Number(newOrderState.barId)]||{}).__entity__) || 'SAGA GYPSY BEER PROJECT')
   };
   const barForLog = bars.find(x=>x.id===Number(newOrderState.barId));
   if (editOrderId) {
@@ -7685,6 +7689,18 @@ function setBarEntity(barId, entity) {
   renderPage();
 }
 
+// Which entity (SAGA / Two Down) raises the service invoice for an order.
+// Orders snapshot the bar's invoicing entity at the time they were placed
+// (order.invoiceEntity) — without this, changing a bar's entity later would
+// retroactively move every one of its PAST orders to the new entity too,
+// since rateCard[barId].__entity__ is a single live value with no history.
+// Older orders created before this snapshot existed fall back to the bar's
+// current entity, same as before.
+function orderInvoiceEntity(o, bar) {
+  if (o && o.invoiceEntity) return o.invoiceEntity;
+  return ((rateCard[bar && bar.id]||{}).__entity__) || 'SAGA GYPSY BEER PROJECT';
+}
+
 function saveRateCardBar(barId) {
   // Read beer rates and dates from DOM
   BEERS.forEach(beer => {
@@ -7853,7 +7869,7 @@ function pageInvoicing() {
 
   const tabOrders = filteredOrders.filter(o => {
     const b = bars.find(x=>x.id===o.barId)||{};
-    const entity = (rateCard[b.id]||{}).__entity__ || 'SAGA GYPSY BEER PROJECT';
+    const entity = orderInvoiceEntity(o, b);
     return invEntityTab === 'SAGA' ? entity === 'SAGA GYPSY BEER PROJECT' : entity === 'TWO DOWN HOSPITALITY';
   });
 
@@ -7872,7 +7888,7 @@ function pageInvoicing() {
   const rows = tabOrders.map(o => {
     const b = bars.find(x=>x.id===o.barId)||{barName:'Unknown'};
     const rc = rateCard[b.id] || {};
-    const entity = rc.__entity__ || 'SAGA GYPSY BEER PROJECT';
+    const entity = orderInvoiceEntity(o, b);
     const isSaga = entity === 'SAGA GYPSY BEER PROJECT';
     const inv = invData[o.id] || {};
     const mrpDisc = Number(inv.mrpDiscount)||0;
@@ -7953,7 +7969,7 @@ function pageInvoicing() {
   tabOrders.forEach(o=>{
     const b = bars.find(x=>x.id===o.barId)||{};
     const rc = rateCard[b.id]||{};
-    const entity = rc.__entity__||'SAGA GYPSY BEER PROJECT';
+    const entity = orderInvoiceEntity(o, b);
     const isSaga = entity==='SAGA GYPSY BEER PROJECT';
     const hist = HISTORICAL_INV_DATA[o.id];
     const inv = invData[o.id]||{};
