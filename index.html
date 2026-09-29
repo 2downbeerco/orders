@@ -4657,18 +4657,22 @@ function pageOrders() {
           activeBeerCodes.has(bb.beer) &&
           !bb.inactive
         );
-        if (activeBatches.length > 0) {
-          return activeBatches.map(bb => {
-            const beerInfo = BEERS.find(x=>x.code===bb.beer);
-            const litresLabel = Number(bb.litres) > 0 ? `, ${bb.litres}L` : '';
-            return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch}${litresLabel})</option>`;
-          }).join('');
-        }
-        // Fallback — no breweryBeers synced yet
-        return [...orderBeerCodes].filter(c=>activeBeerCodes.has(c)).map(c=>{
+        const batchOpts = activeBatches.map(bb => {
+          const beerInfo = BEERS.find(x=>x.code===bb.beer);
+          const litresLabel = Number(bb.litres) > 0 ? `, ${bb.litres}L` : '';
+          return `<option value="${bb.beer}|${bb.batch}">${bb.beer} – ${beerInfo?.name||bb.beer} (Batch: ${bb.batch}${litresLabel})</option>`;
+        });
+        // Also always offer every active beer code that has no brewery batch —
+        // needed for a keg that isn't drawing from tracked brew-ops stock at
+        // all (e.g. beer brought in from another facility for an event). Pick
+        // Source = External for these; there's nothing in Cold Room/Tank to
+        // select from since it was never brewed here.
+        const batchedCodes = new Set(activeBatches.map(bb=>bb.beer));
+        const noBatchOpts = [...activeBeerCodes].filter(c=>!batchedCodes.has(c)).map(c=>{
           const b = BEERS.find(x=>x.code===c);
-          return `<option value="${c}|">${c} – ${b?.name||c} (no batch data)</option>`;
-        }).join('');
+          return `<option value="${c}|">${c} – ${b?.name||c} (no batch data — use Source: External)</option>`;
+        });
+        return batchOpts.concat(noBatchOpts).join('');
       })();
 
       // Already assigned kegs tags
@@ -4733,6 +4737,7 @@ function pageOrders() {
               <select id="psource-${pKey}" class="inp" style="width:130px;font-size:12px" onchange="updateFillSourceOpts('${pKey}')">
                 <option value="coldroom">Cold Room</option>
                 <option value="tank">Tank</option>
+                <option value="external">External (not brewed here)</option>
               </select>
               <div id="psource-hint-${pKey}" style="font-size:10px;color:var(--muted);margin-top:2px;"></div>
             </div>
@@ -4982,10 +4987,18 @@ function updateFillSourceOpts(pKey) {
       sourceSel.value = 'coldroom';
       sourceSel.disabled = true;
       if (sourceHint) sourceHint.textContent = 'Only in cold room';
-    } else {
-      // Both, or neither could be confirmed — let the brewer choose manually
+    } else if (!inTank && !inColdRoom) {
+      // No brew-ops stock exists for this beer/batch at all — it isn't
+      // something we brewed, so there's nothing to deduct from. Default to
+      // External rather than silently offering Cold Room/Tank options that
+      // would just fail to match anything.
+      sourceSel.value = 'external';
       sourceSel.disabled = false;
-      if (sourceHint) sourceHint.textContent = inTank && inColdRoom ? 'In both — please choose' : '';
+      if (sourceHint) sourceHint.textContent = 'No brew-ops stock found for this beer — defaulting to External';
+    } else {
+      // Both could be confirmed — let the brewer choose manually
+      sourceSel.disabled = false;
+      if (sourceHint) sourceHint.textContent = 'In both — please choose';
     }
   } else {
     sourceSel.disabled = false;
