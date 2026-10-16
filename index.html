@@ -2694,6 +2694,7 @@ async function syncAllData() {
       [...BARS].forEach(b => barMap[b.id] = {...b});
       remoteBars.forEach(b => { if (b && b.id) barMap[b.id] = b; });
       const mergedBars = Object.values(barMap).sort((a,b) => a.id - b.id);
+      applyBarCityDefaults(mergedBars);   // in-memory only here; loadData persists them
       if (JSON.stringify(mergedBars) !== JSON.stringify(bars)) {
         bars = mergedBars;
         localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
@@ -2991,7 +2992,9 @@ async function loadData() {
       [...BARS].forEach(b => barMap[b.id] = {...b});
       remoteBars.forEach(b => { if (b && b.id) barMap[b.id] = b; });
       bars = Object.values(barMap).sort((a,b) => a.id - b.id);
+      const cityFixed = applyBarCityDefaults(bars);
       localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
+      if (cityFixed.length) saveBarsSubset(cityFixed);   // one-time: store the assigned cities
     } else if (bars.length > 0) {
       await Promise.all(bars.map(b => sbUpsert('bars', String(b.id), b)));
     }
@@ -7550,7 +7553,16 @@ const MRP_PER_LITRE = 134.4;
 
 async function saveRateCard() {
   localStorage.setItem('2down_ratecard', JSON.stringify(rateCard));
-  try { await sbUpsert('kegs', '__ratecard__', { rateCard }); } catch(_) {}
+  try {
+    await sbUpsert('kegs', '__ratecard__', { rateCard });
+  } catch(e) {
+    // Previously swallowed silently — a rate/entity change (including
+    // "Service Invoice by") could look saved locally while never reaching
+    // the server, so every other device (and any invoice run from there)
+    // kept using the old value with no indication anything was wrong.
+    console.error('saveRateCard error:', e);
+    showSyncError('Failed to save the rate card change to the server — it is only saved on this device right now. Try again, or it may not show up elsewhere.');
+  }
 }
 
 function pageRateCard() {
@@ -8434,10 +8446,59 @@ function saveInvRow(orderId) {
 let barsSearch = '';
 let showAddBar = false;
 let showInactive = false;
-let newBar = {barName:'',entity:'',area:'',licNo:'',licType:'FL3'};
+let newBar = {barName:'',entity:'',area:'',city:'',licNo:'',licType:'FL3'};
 let selectedBars = new Set();
 let editBarId = null;
 let editBarData = {};
+
+// ── Bar cities ───────────────────────────────────────────────────────────
+// Every bar belongs to a city (Mumbai, Pune, Thane, Navi Mumbai for now). Existing
+// bars without one are assigned once from this list (anything not listed = Mumbai);
+// new bars get the city autofilled from the Area, based on bars already entered.
+const BAR_CITY_SEED = {
+  69:'Pune', 72:'Pune', 59:'Pune', 56:'Pune', 64:'Pune', 38:'Pune', 48:'Pune', 53:'Pune', 71:'Pune', 73:'Pune', 82:'Pune',
+  54:'Navi Mumbai', 57:'Navi Mumbai',
+  39:'Thane', 52:'Thane', 33:'Thane', 25:'Thane', 34:'Thane', 36:'Thane', 45:'Thane', 83:'Thane'
+};
+const _normArea = a => (a||'').trim().toLowerCase();
+function cityForArea(area, excludeId) {
+  const key = _normArea(area);
+  if (!key) return '';
+  const counts = {};
+  bars.forEach(b => {
+    if (!b || b.isEvent || b.id === excludeId || !b.city || _normArea(b.area) !== key) return;
+    counts[b.city] = (counts[b.city]||0) + 1;
+  });
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  return top ? top[0] : '';
+}
+// Fills in missing cities. Returns the ids it changed.
+function applyBarCityDefaults(list) {
+  const changed = [];
+  list.forEach(b => {
+    if (!b || b.isEvent || b.city) return;
+    b.city = BAR_CITY_SEED[b.id] || 'Mumbai';
+    changed.push(b.id);
+  });
+  return changed;
+}
+function autofillBarCity(target) {
+  // target: 'nb' (new bar form) or 'eb' (edit form)
+  const data = target === 'nb' ? newBar : editBarData;
+  if (data._cityTouched) return;
+  const guess = cityForArea(data.area, target === 'eb' ? data.id : null);
+  if (!guess && target === 'eb') return;   // editing: keep the existing city if the new area is unknown
+  data.city = guess;
+  const el = document.getElementById(target + '-city');
+  if (el) el.value = guess;
+}
+function barCityInput(target, data) {
+  return `<div>
+    <label class="lbl">City *</label>
+    <input class="inp" id="${target}-city" value="${(data.city||'').replace(/"/g,'&quot;')}" placeholder="Autofilled from area"
+      oninput="${target==='nb'?'newBar':'editBarData'}.city=this.value;${target==='nb'?'newBar':'editBarData'}._cityTouched=!!this.value.trim()">
+  </div>`;
+}
 
 function pageBars() {
   // Events is a system placeholder bar (see New Order), not a real venue —
@@ -8447,7 +8508,8 @@ function pageBars() {
 
   const searchFn = b =>
     b.barName.toLowerCase().includes(barsSearch.toLowerCase()) ||
-    (b.area||'').toLowerCase().includes(barsSearch.toLowerCase());
+    (b.area||'').toLowerCase().includes(barsSearch.toLowerCase()) ||
+    (b.city||'').toLowerCase().includes(barsSearch.toLowerCase());
 
   const filtered = (showInactive ? bars.filter(b=>!b.isEvent) : activeBars).filter(searchFn).sort((a,b)=>a.barName.localeCompare(b.barName));
 
@@ -8461,12 +8523,12 @@ function pageBars() {
     if (isEditing) {
       return `<tr style="background:rgba(88,166,255,0.07)">
         <td style="width:36px"></td>
-        <td colspan="6" style="padding:12px">
+        <td colspan="7" style="padding:12px">
           <div class="grid2" style="margin-bottom:10px">
-            ${[['barName','Bar Name *'],['entity','Legal Entity'],['area','Area'],['licNo','Licence No']].map(([k,l])=>`
+            ${[['barName','Bar Name *'],['entity','Legal Entity'],['area','Area'],['CITY',''],['licNo','Licence No']].map(([k,l])=>k==='CITY' ? barCityInput('eb', editBarData) : `
               <div>
                 <label class="lbl">${l}</label>
-                <input class="inp" value="${(editBarData[k]||'').replace(/"/g,'&quot;')}" oninput="editBarData['${k}']=this.value">
+                <input class="inp" value="${(editBarData[k]||'').replace(/"/g,'&quot;')}" oninput="editBarData['${k}']=this.value${k==='area'?";autofillBarCity('eb')":''}">
               </div>`).join('')}
             <div>
               <label class="lbl">Licence Type</label>
@@ -8494,6 +8556,7 @@ function pageBars() {
       </td>
       <td style="font-size:12px;color:var(--muted);${b.inactive?'opacity:0.45':''}">${cleanEntity(b.entity)}</td>
       <td style="${b.inactive?'opacity:0.45':''}">${b.area}</td>
+      <td style="${b.inactive?'opacity:0.45':''}">${b.city||'<span style="color:var(--red)">—</span>'}</td>
       <td style="font-family:monospace;${b.inactive?'opacity:0.45':''}">${b.licNo||'--'}</td>
       <td>${badge(b.licType, b.inactive?'#555':'#58A6FF')}</td>
       <td>
@@ -8518,10 +8581,10 @@ function pageBars() {
     <div class="card" style="margin-bottom:18px">
       <div class="section-title">New Bar</div>
       <div class="grid2">
-        ${[['barName','Bar Name *'],['entity','Legal Entity'],['area','Area'],['licNo','Licence No']].map(([k,l])=>`
+        ${[['barName','Bar Name *'],['entity','Legal Entity'],['area','Area'],['CITY',''],['licNo','Licence No']].map(([k,l])=>k==='CITY' ? barCityInput('nb', newBar) : `
           <div>
             <label class="lbl">${l}</label>
-            <input class="inp" id="nb-${k}" value="${newBar[k]||''}" oninput="newBar['${k}']=this.value">
+            <input class="inp" id="nb-${k}" value="${newBar[k]||''}" oninput="newBar['${k}']=this.value${k==='area'?";autofillBarCity('nb')":''}">
           </div>`).join('')}
         <div>
           <label class="lbl">Licence Type</label>
@@ -8555,7 +8618,7 @@ function pageBars() {
               <input type="checkbox" ${allSelected?'checked':''} onchange="toggleAllBars(this.checked,${JSON.stringify(allFilteredIds)})"
                 style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
             </th>
-            <th>Bar</th><th>Legal Entity</th><th>Area</th><th>Lic No</th><th>Type</th><th></th>
+            <th>Bar</th><th>Legal Entity</th><th>Area</th><th>City</th><th>Lic No</th><th>Type</th><th></th>
           </tr></thead>
           <tbody id="bars-tbody">${rows}</tbody>
         </table>
@@ -8598,10 +8661,13 @@ function deactivateSelectedBars() {
 
 function saveNewBar() {
   if (!newBar.barName) { alert('Bar name is required.'); return; }
+  const city = (newBar.city||'').trim();
+  if (!city) { alert('City is required.'); document.getElementById('nb-city')?.focus(); return; }
   const newBarId = Date.now();
-  bars.push({...newBar, id: newBarId, inactive: false});
+  const { _cityTouched, ...newBarData } = newBar;
+  bars.push({...newBarData, city, id: newBarId, inactive: false});
   saveBar(newBarId);
-  newBar = {barName:'',entity:'',area:'',licNo:'',licType:'FL3'};
+  newBar = {barName:'',entity:'',area:'',city:'',licNo:'',licType:'FL3'};
   showAddBar = false;
   renderPage();
 }
@@ -8617,7 +8683,10 @@ function startEditBar(id) {
 
 function saveEditBar(id) {
   if (!editBarData.barName) { alert('Bar name is required.'); return; }
-  bars = bars.map(b=>b.id===id?{...b,...editBarData}:b);
+  const city = (editBarData.city||'').trim();
+  if (!city) { alert('City is required.'); document.getElementById('eb-city')?.focus(); return; }
+  const { _cityTouched, ...editData } = editBarData;
+  bars = bars.map(b=>b.id===id?{...b,...editData,city}:b);
   saveBar(id);
   editBarId = null;
   editBarData = {};
