@@ -280,7 +280,6 @@ const BARS = [
   {id:71,barName:"Downpour Baner",entity:"Downpour",area:"Baner",licNo:"1076",licType:"FLBR2"},
   {id:72,barName:"Kyma KP",entity:"Kyma Restaurant of Shiv Sagar Foods (Kyma KP)",area:"Mundhwa",licNo:"3453",licType:"FL3"},
   {id:73,barName:"We Idliwale Barroom",entity:"Medium Raw Hospitality Pvt Ltd",area:"Balewadi",licNo:"3433",licType:"FL3"},
-  {id:74,barName:"Sammy Sosa Malad",entity:"Samvirat Properties (Sammy Sosa Malad)",area:"Malad",licNo:"2185",licType:"FL3"},
   {id:75,barName:"The Irish House Andheri",entity:"The Irish House Food & Brew Pvt Ltd",area:"Andheri West",licNo:"",licType:"FL3"},
   {id:76,barName:"TAB",entity:"",area:"",licNo:"",licType:"FL3"},
   {id:77,barName:"BW Khar",entity:"",area:"Khar West",licNo:"",licType:"FL3",inactive:true},
@@ -2613,6 +2612,8 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
 
 let orders = [];
+// Duplicate bar records that must never show up (the database row is left untouched).
+const REMOVED_BAR_IDS = new Set([74]);   // 74 = duplicate of Sammy Sosa Malad (id 11)
 let bars = [...BARS];
 let kegs = [];
 let brewStateBeers = []; // Loaded from brew_state table
@@ -2692,7 +2693,7 @@ async function syncAllData() {
       // this periodic background sync instead of being stripped out.
       const barMap = {};
       [...BARS].forEach(b => barMap[b.id] = {...b});
-      remoteBars.forEach(b => { if (b && b.id) barMap[b.id] = b; });
+      remoteBars.forEach(b => { if (b && b.id && !REMOVED_BAR_IDS.has(b.id)) barMap[b.id] = b; });
       const mergedBars = Object.values(barMap).sort((a,b) => a.id - b.id);
       applyBarCityDefaults(mergedBars);   // in-memory only here; loadData persists them
       if (JSON.stringify(mergedBars) !== JSON.stringify(bars)) {
@@ -2941,7 +2942,7 @@ async function loadActivityLog() {
 async function loadData() {
   // Load from localStorage immediately and render right away
   try { const o = localStorage.getItem('2down_orders_v4'); if (o) orders = JSON.parse(o); } catch(_){}
-  try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b); } catch(_){}
+  try { const b = localStorage.getItem('2down_bars_v4');   if (b) bars   = JSON.parse(b).filter(x => !REMOVED_BAR_IDS.has(x.id)); } catch(_){}
   try { const k = localStorage.getItem('2down_kegs_v4');   if (k) kegs   = JSON.parse(k); else kegs = [...KEG_SEED]; } catch(_){ kegs = [...KEG_SEED]; }
   try { const bb = localStorage.getItem('2down_brewery_beers'); if (bb) breweryBeers = JSON.parse(bb); } catch(_){}
   try { const kh = localStorage.getItem('2down_keg_history'); if (kh) kegHistory = JSON.parse(kh); } catch(_){}
@@ -2990,7 +2991,7 @@ async function loadData() {
       // Merge: start with seed BARS, overlay with any Supabase updates
       const barMap = {};
       [...BARS].forEach(b => barMap[b.id] = {...b});
-      remoteBars.forEach(b => { if (b && b.id) barMap[b.id] = b; });
+      remoteBars.forEach(b => { if (b && b.id && !REMOVED_BAR_IDS.has(b.id)) barMap[b.id] = b; });
       bars = Object.values(barMap).sort((a,b) => a.id - b.id);
       const cityFixed = applyBarCityDefaults(bars);
       localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
