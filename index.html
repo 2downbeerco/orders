@@ -7775,9 +7775,20 @@ function savePatelHalf(monthKey, half, btn) {
   if (!inp) return;
   if (!patelMonthlyService[monthKey]) patelMonthlyService[monthKey] = {};
   patelMonthlyService[monthKey][half] = Number(inp.value)||0;
+  // Keep whatever is typed in the other half's box too, so re-rendering below
+  // (needed to refresh the Service totals and Grand Total) doesn't lose it.
+  const otherHalf = half === 'h1' ? 'h2' : 'h1';
+  const otherInp = document.querySelector(`input[data-patel-${otherHalf}="${monthKey}"]`);
+  const otherTyped = otherInp ? otherInp.value : null;
+  const otherSaved = patelMonthlyService[monthKey][otherHalf];
   savePatelMonthlyService();
-  if (btn) { const orig=btn.textContent; btn.textContent='Saved ✓'; setTimeout(()=>{btn.textContent=orig;},1200); }
-  else _renderPage();
+  _renderPage();
+  if (otherTyped !== null && Number(otherTyped||0) !== Number(otherSaved||0)) {
+    const el = document.querySelector(`input[data-patel-${otherHalf}="${monthKey}"]`);
+    if (el) el.value = otherTyped;
+  }
+  const saveBtn = document.querySelector(`input[data-patel-${half}="${monthKey}"]`)?.parentElement?.querySelector('button');
+  if (saveBtn) { const orig=saveBtn.textContent; saveBtn.textContent='Saved ✓'; setTimeout(()=>{saveBtn.textContent=orig;},1200); }
 }
 
 function pageInvoicing() {
