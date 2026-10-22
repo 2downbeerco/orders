@@ -2622,6 +2622,7 @@ let activityLog = []; // [{id, timestamp, action, details}]
 
 let _autoSyncInterval = null;
 let _realtimeWs = null;
+let _writeSeq = 0; // bumps on every local write; lets sync detect a write that happened mid-fetch
 let _syncLocked = 0; // counter — incoming sync is skipped while > 0
 let _brewPollInterval = null;
 
@@ -2671,10 +2672,15 @@ function isEditingField() {
 
 async function syncAllData() {
   if (_syncLocked > 0) return; // a local write is in-flight — skip this sync round to avoid clobbering it
+  const _seqAtStart = _writeSeq;
   try {
     const [remoteOrders, remoteBars, remoteKegs] = await Promise.all([
       sbGet('orders'), sbGet('bars'), sbGet('kegs')
     ]);
+    // A local save started (or finished) while we were fetching, so this snapshot
+    // may predate it. Applying it would roll back in-memory data and the next save
+    // would then overwrite the server with the stale copy. Drop it; the next sync catches up.
+    if (_syncLocked > 0 || _writeSeq !== _seqAtStart) return;
     window._syncFailCount = 0;
     let changed = false;
 
@@ -2919,8 +2925,21 @@ function logActivity(action, details) {
 
 async function saveActivityLog() {
   localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
-  _syncLocked++;
-  try { await sbUpsert('kegs', '__activity_log__', { activityLog }); }
+  _syncLocked++; _writeSeq++;
+  try {
+    // Merge with the server copy first so a stale tab never wipes other people's entries
+    try {
+      const rows = await fetch(`${SB_URL}/rest/v1/kegs?id=eq.__activity_log__&select=data`, { headers: SB_HDR }).then(r=>r.json());
+      const remote = rows && rows[0] && rows[0].data && rows[0].data.activityLog;
+      if (Array.isArray(remote)) {
+        const seen = new Set(activityLog.map(e=>e.id));
+        remote.forEach(e => { if (e && !seen.has(e.id)) activityLog.push(e); });
+        activityLog.sort((a,b)=> (b.timestamp||'').localeCompare(a.timestamp||''));
+        localStorage.setItem('2down_activity_log', JSON.stringify(activityLog));
+      }
+    } catch(_) {}
+    await sbUpsert('kegs', '__activity_log__', { activityLog });
+  }
   catch(e) { console.error('saveActivityLog failed:', e); }
   finally { _syncLocked--; }
 }
@@ -3085,7 +3104,7 @@ async function saveOrders() {
   orders = orders.filter(o => o && o.id != null && o.id !== '');
   localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
   showToast();
-  _syncLocked++;
+  _syncLocked++; _writeSeq++;
   try {
     await Promise.all(orders.map(o => sbUpsert('orders', String(o.id), o)));
     setSyncStatus('Saved', '#16A34A');
@@ -3108,7 +3127,7 @@ async function saveOrdersSubset(orderIds) {
   localStorage.setItem('2down_orders_v4', JSON.stringify(orders));
   showToast();
   if (!list.length) return;
-  _syncLocked++;
+  _syncLocked++; _writeSeq++;
   try {
     await Promise.all(list.map(o => sbUpsert('orders', String(o.id), o)));
     setSyncStatus('Saved', '#16A34A');
@@ -3125,7 +3144,7 @@ function saveOrder(orderId) { return saveOrdersSubset([orderId]); }
 async function saveBars() {
   localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
   showToast();
-  _syncLocked++;
+  _syncLocked++; _writeSeq++;
   try {
     await Promise.all(bars.map(b => sbUpsert('bars', String(b.id), b)));
     setSyncStatus('Saved', '#16A34A');
@@ -3144,7 +3163,7 @@ async function saveBarsSubset(barIds) {
   localStorage.setItem('2down_bars_v4', JSON.stringify(bars));
   showToast();
   if (!list.length) return;
-  _syncLocked++;
+  _syncLocked++; _writeSeq++;
   try {
     await Promise.all(list.map(b => sbUpsert('bars', String(b.id), b)));
     setSyncStatus('Saved', '#16A34A');
@@ -3160,7 +3179,7 @@ function saveBar(barId) { return saveBarsSubset([barId]); }
 
 async function saveKegs() {
   localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
-  _syncLocked++;
+  _syncLocked++; _writeSeq++;
   try {
     await Promise.all(kegs.map(k => sbUpsert('kegs', k.kegNo, k)));
     setSyncStatus('Saved', '#16A34A');
@@ -3184,7 +3203,7 @@ async function saveKegsSubset(kegNos) {
   const list = [...new Set(kegNos)].map(no => kegs.find(k => k.kegNo === no)).filter(Boolean);
   localStorage.setItem('2down_kegs_v4', JSON.stringify(kegs));
   if (!list.length) return;
-  _syncLocked++;
+  _syncLocked++; _writeSeq++;
   try {
     await Promise.all(list.map(k => sbUpsert('kegs', k.kegNo, k)));
     setSyncStatus('Saved', '#16A34A');
@@ -5055,14 +5074,32 @@ function cancelKegFill(pKey) {
   _renderPage();
 }
 
-function commitKegAssign(orderId, pKey) {
+// Pull the latest copy of one order and one keg from the server before changing
+// them, so an assignment is applied on top of what other brewers/tabs have already saved.
+async function refreshOrderAndKeg(orderId, kegNo) {
+  try {
+    const [oRows, kRows] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=data`, { headers: SB_HDR }).then(r=>r.json()),
+      kegNo ? fetch(`${SB_URL}/rest/v1/kegs?id=eq.${encodeURIComponent(kegNo)}&select=data`, { headers: SB_HDR }).then(r=>r.json()) : Promise.resolve([])
+    ]);
+    const oi = orders.findIndex(x=>String(x.id)===String(orderId));
+    if (oi>=0 && oRows && oRows[0] && oRows[0].data && oRows[0].data.id) orders[oi] = oRows[0].data;
+    const ki = kegs.findIndex(x=>x.kegNo===kegNo);
+    if (ki>=0 && kRows && kRows[0] && kRows[0].data && kRows[0].data.kegNo) kegs[ki] = kRows[0].data;
+  } catch(_) {}
+}
+
+async function commitKegAssign(orderId, pKey) {
   const pending = pendingKegFills[pKey];
   if (!pending) return;
   if (pending.fills.length === 0) { alert('Please add at least one beer+batch fill.'); return; }
+  _syncLocked++; _writeSeq++;
+  try { await refreshOrderAndKeg(orderId, pending.kegNo); } finally { _syncLocked--; }
   const o = orders.find(x=>x.id===orderId);
   const k = kegs.find(x=>x.kegNo===pending.kegNo);
   if (!o || !k) return;
   if (!o.assignedKegs) o.assignedKegs = [];
+  o.assignedKegs = o.assignedKegs.filter(a => a.kegNo !== pending.kegNo); // never double-add
 
   // Validate at least some fill has been added
   const totalFilled = pending.fills.reduce((s,f)=>s+f.litres,0);
@@ -5091,9 +5128,7 @@ function commitKegAssign(orderId, pKey) {
   k.beer = primaryFill.batch ? `${primaryFill.beer}${primaryFill.batch}` : primaryFill.beer;
 
   // Clear any previous dispatch history for this keg+order before logging
-  if (kegHistory[pending.kegNo]) {
-    kegHistory[pending.kegNo] = kegHistory[pending.kegNo].filter(e => e.orderId !== orderId);
-  }
+  removeKegHistoryForOrder(pending.kegNo, orderId);
 
   logKegEvent(pending.kegNo, 'Dispatched', {
     beer: primaryFill.beer, batch: primaryFill.batch,
@@ -5737,6 +5772,8 @@ async function assignKeg(orderId, kegNo, beerBatch) {
   if (!beerBatch) { alert('Please select the beer and batch.'); return; }
   const [beerCode, batch] = beerBatch.split('|');
   if (!beerCode) { alert('Please select the beer and batch.'); return; }
+  _syncLocked++; _writeSeq++;
+  try { await refreshOrderAndKeg(orderId, kegNo); } finally { _syncLocked--; }
   const o = orders.find(x=>x.id===orderId);
   const k = kegs.find(x=>x.kegNo===kegNo);
   if (!o || !k) return;
@@ -5755,7 +5792,9 @@ async function assignKeg(orderId, kegNo, beerBatch) {
   renderPage();
 }
 
-function unassignKeg(orderId, kegNo) {
+async function unassignKeg(orderId, kegNo) {
+  _syncLocked++; _writeSeq++;
+  try { await refreshOrderAndKeg(orderId, kegNo); } finally { _syncLocked--; }
   const o = orders.find(x=>x.id===orderId);
   const k = kegs.find(x=>x.kegNo===kegNo);
   if (!o) return;
@@ -5770,7 +5809,7 @@ function unassignKeg(orderId, kegNo) {
   }
   // Remove this keg's dispatch history for this order
   if (kegHistory[kegNo]) {
-    kegHistory[kegNo] = kegHistory[kegNo].filter(e => e.orderId !== orderId);
+    removeKegHistoryForOrder(kegNo, orderId);
     saveKegHistory();
   }
 
@@ -5819,7 +5858,30 @@ function removeBeer(idx) {
 
 
 
+const _histRemoved = new Set(); // 'kegNo|date|event' entries this tab deliberately deleted
+function _histKey(kegNo, e) { return kegNo + '|' + e.date + '|' + e.event; }
+function removeKegHistoryForOrder(kegNo, orderId) {
+  if (!kegHistory[kegNo]) return;
+  kegHistory[kegNo].forEach(e => { if (e.orderId === orderId) _histRemoved.add(_histKey(kegNo, e)); });
+  kegHistory[kegNo] = kegHistory[kegNo].filter(e => e.orderId !== orderId);
+}
 async function saveKegHistory() {
+  try {
+    // Merge with the server copy so a stale tab never wipes other people's history
+    const rows = await fetch(`${SB_URL}/rest/v1/kegs?id=eq.__keg_history__&select=data`, { headers: SB_HDR }).then(r=>r.json());
+    const remote = rows && rows[0] && rows[0].data && rows[0].data.kegHistory;
+    if (remote && typeof remote === 'object') {
+      Object.keys(remote).forEach(no => {
+        const mine = kegHistory[no] || (kegHistory[no] = []);
+        const have = new Set(mine.map(e => _histKey(no, e)));
+        (remote[no]||[]).forEach(e => {
+          const k = _histKey(no, e);
+          if (!have.has(k) && !_histRemoved.has(k)) mine.push(e);
+        });
+        mine.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+      });
+    }
+  } catch(_) {}
   localStorage.setItem('2down_keg_history', JSON.stringify(kegHistory));
   try { await sbUpsert('kegs', '__keg_history__', { kegHistory }); } catch(_) {}
 }
