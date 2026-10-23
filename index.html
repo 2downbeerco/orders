@@ -2609,7 +2609,40 @@ const HISTORICAL_BATCH_DELIVERIES = {"GR12": [{"date": "2026-04-02", "barName": 
 // ── Storage — Supabase ────────────────────────────────────────────────────
 const SB_URL = 'https://wznilnuaatmlqgfankno.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bmlsbnVhYXRtbHFnZmFua25vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NjMzODUsImV4cCI6MjA5MjQzOTM4NX0.CP15u0zCIM6o27hvMvWAuSYFdzdFBefccNPPvFXwIwQ';
-const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'x-client-info': 'bar/2' };
+
+// ── App version gate ──────────────────────────────────────────────────────────
+// Every request carries this app's name+version (x-client-info). The database
+// rejects writes from versions below the minimum in app_meta, and this app
+// locks itself when it sees its own version has been retired.
+const APP_NAME = 'bar';
+const APP_VERSION = 2;
+let _appBlocked = false;
+function blockStaleApp() {
+  if (_appBlocked) return;
+  _appBlocked = true;
+  try { if (typeof _autoSyncInterval !== 'undefined' && _autoSyncInterval) clearInterval(_autoSyncInterval); } catch(_) {}
+  try { if (typeof _realtimeWs !== 'undefined' && _realtimeWs) { _realtimeWs.onclose = null; _realtimeWs.close(); } } catch(_) {}
+  const d = document.createElement('div');
+  d.id = 'app-stale-overlay';
+  d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#fff;display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,-apple-system,Segoe UI,sans-serif';
+  d.innerHTML = '<div style="max-width:440px;text-align:center"><div style="font-size:40px;margin-bottom:8px">⚠️</div>'
+    + '<div style="font-size:20px;font-weight:700;color:#111;margin-bottom:10px">This window is out of date</div>'
+    + '<div style="font-size:14px;line-height:1.55;color:#444;margin-bottom:18px">A newer version of this app is in use. Nothing you do here will be saved, and it could overwrite other people’s work. Close this window and open the latest version of the app, then continue there.</div>'
+    + '<button onclick="location.reload()" style="padding:10px 22px;font-size:14px;font-weight:600;border:0;border-radius:8px;background:#111;color:#fff;cursor:pointer">Reload</button></div>';
+  document.body.appendChild(d);
+}
+async function checkMinVersion() {
+  if (_appBlocked) return;
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/app_meta?select=app,min_version', { headers: SB_HDR });
+    if (!res.ok) return;                       // fail open: never lock people out because of a network blip
+    const rows = await res.json();
+    const mine = Array.isArray(rows) && rows.find(r => r.app === APP_NAME);
+    if (mine && Number(mine.min_version) > APP_VERSION) blockStaleApp();
+  } catch (_) {}
+}
+
 
 let orders = [];
 // Duplicate bar records that must never show up (the database row is left untouched).
@@ -2888,6 +2921,7 @@ async function sbGet(table) {
 }
 
 async function sbUpsert(table, id, data) {
+  if (_appBlocked) throw new Error('App out of date — not saved');
   const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
     method: 'POST',
     headers: { ...SB_HDR, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
@@ -8886,6 +8920,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const pw = document.getElementById('main-pw');
   if (pw) pw.focus();
 });
+
+// Check the minimum version on load, every 30s, and whenever the window regains focus
+setTimeout(checkMinVersion, 1200);
+setInterval(checkMinVersion, 30000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkMinVersion(); });
+window.addEventListener('focus', checkMinVersion);
 </script>
 </body>
 </html>
