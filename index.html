@@ -8120,7 +8120,7 @@ function pageInvoicing() {
       </div>
     </div>
     ${entityTabBar}
-    <div style="display:grid;grid-template-columns:${invEntityTab==='SAGA'?'repeat(5,1fr)':'repeat(3,1fr)'};gap:12px;margin-bottom:20px;max-width:${invEntityTab==='SAGA'?'100%':'700px'}">
+    <div style="display:grid;grid-template-columns:${invEntityTab==='SAGA'?'repeat(4,1fr)':'repeat(3,1fr)'};gap:12px;margin-bottom:20px;max-width:${invEntityTab==='SAGA'?'100%':'700px'}">
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
         <div style="font-size:20px;font-weight:700">₹${totalMrpFinal.toLocaleString('en-IN')}</div>
@@ -8137,10 +8137,6 @@ function pageInvoicing() {
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">GST Total</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalGst)}</div>
-      </div>
-      <div class="card" style="padding:16px;text-align:center">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Net of GST</div>
-        <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalNetOfGST)}</div>
       </div>` : ''}
     </div>
     <div class="card" style="padding:0">
