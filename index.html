@@ -8120,7 +8120,7 @@ function pageInvoicing() {
       </div>
     </div>
     ${entityTabBar}
-    <div style="display:grid;grid-template-columns:${invEntityTab==='SAGA'?'repeat(4,1fr)':'repeat(2,1fr)'};gap:12px;margin-bottom:20px;max-width:${invEntityTab==='SAGA'?'100%':'500px'}">
+    <div style="display:grid;grid-template-columns:${invEntityTab==='SAGA'?'repeat(5,1fr)':'repeat(3,1fr)'};gap:12px;margin-bottom:20px;max-width:${invEntityTab==='SAGA'?'100%':'700px'}">
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">MRP Total</div>
         <div style="font-size:20px;font-weight:700">₹${totalMrpFinal.toLocaleString('en-IN')}</div>
@@ -8128,6 +8128,10 @@ function pageInvoicing() {
       <div class="card" style="padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Service Total</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalSvcFinal)}</div>
+      </div>
+      <div class="card" style="padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Revenue</div>
+        <div style="font-size:20px;font-weight:700">₹${fmt2tot(totalMrpFinal+totalSvcFinal)}</div>
       </div>
       ${invEntityTab==='SAGA' ? `
       <div class="card" style="padding:16px;text-align:center">
@@ -8255,7 +8259,7 @@ function renderInvPatel(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
         <div style="font-size:20px;font-weight:700">₹${fmt2(h2)}</div>
       </div>` : ''}
       <div class="card" style="padding:16px;text-align:center">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Revenue</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2(grandTotal)}</div>
       </div>
     </div>
@@ -8358,7 +8362,7 @@ function renderInvEvents(entityTabBar, viewToggle, periodNav, wStart, wEnd, mSta
         <div style="font-size:20px;font-weight:700">₹${fmt2(totalSvc)}</div>
       </div>
       <div class="card" style="padding:16px;text-align:center">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Grand Total</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Revenue</div>
         <div style="font-size:20px;font-weight:700">₹${fmt2(totalMrp+totalSvc)}</div>
       </div>
     </div>
