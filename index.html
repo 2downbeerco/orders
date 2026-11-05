@@ -8653,7 +8653,7 @@ function pageBars() {
       </tr>`;
     }
 
-    return `<tr data-search="${b.barName} ${b.area||''}" style="background:${checked?'rgba(218,54,51,0.07)':b.inactive?'rgba(139,148,158,0.05)':''}">
+    return `<tr data-search="${b.barName} ${b.area||''} ${b.city||''} ${b.entity||''}" style="background:${checked?'rgba(218,54,51,0.07)':b.inactive?'rgba(139,148,158,0.05)':''}">
       <td style="width:36px;min-width:36px;max-width:36px;text-align:center;padding:0 8px;box-sizing:border-box">
         <input type="checkbox" ${checked?'checked':''} onchange="toggleBarSelect(${b.id},this.checked)"
           style="width:15px;height:15px;cursor:pointer;accent-color:var(--red)">
@@ -8709,7 +8709,7 @@ function pageBars() {
 
   return `
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
-      <input class="inp" id="bars-search-inp" placeholder="Search bars or area…" value="${barsSearch}" oninput="setBarsSearch(this.value)" style="width:260px">
+      <input class="inp" id="bars-search-inp" placeholder="Search bar, area, city or entity…" value="${barsSearch}" oninput="setBarsSearch(this.value)" style="width:260px">
       <button class="btn btn-primary" onclick="showAddBar=!showAddBar;renderPage()">${showAddBar?'Cancel':'+ Add Bar'}</button>
       <button class="btn btn-ghost" onclick="showInactive=!showInactive;renderPage()">
         ${showInactive?'Hide Inactive':'Show Inactive'} ${inactiveBars.length?`(${inactiveBars.length})`:''}
