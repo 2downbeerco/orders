@@ -8206,21 +8206,25 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
 
   // 2) Patel Provision Stores — MRP auto; Service is typed per half-month (month view only)
   const patelBar = bars.find(b => (b.barName||'').toLowerCase().includes('patel provision')) || {id:-1};
-  const patelEntity = ((rateCard[patelBar.id]||{}).__entity__) || SAGA;
+  // Patel service bills: raised by SAGA (GST-inclusive) before June 2026, by
+  // Two Down (no GST) from June 2026 onward.
+  const PATEL_TWODOWN_FROM = '2026-06';
   let pMrp = 0;
   [...orders, ...HISTORICAL_ORDERS].filter(o => o.barId === patelBar.id && inPeriod(o)).forEach(o => {
     const hist = HISTORICAL_INV_DATA[o.id];
     const litres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
     pMrp += hist ? (hist.mrpAmount||0) : Math.ceil(MRP_PER_LITRE*1.02*litres);
   });
-  let pSvc = 0, pNote = 'Service is entered per month — shown in Month view only';
+  let pSvc = 0, pGst = 0, pNote = 'Service is entered per month — shown in Month view only';
   if (invView === 'month') {
     const key = `${selDate.getFullYear()}-${String(selDate.getMonth()+1).padStart(2,'0')}`;
     const sv = patelMonthlyService[key] || {};
     pSvc = (Number(sv.h1)||0) + (Number(sv.h2)||0);
-    pNote = '';
+    const raisedBy = key >= PATEL_TWODOWN_FROM ? 'TWO DOWN HOSPITALITY' : SAGA;
+    pGst = gstIn(pSvc, raisedBy);
+    pNote = raisedBy === SAGA ? 'Service bill raised by SAGA — includes 18% GST' : 'Service bill raised by Two Down — no GST';
   }
-  streams.push({ label:'Patel Provision Stores', mrp:pMrp, svc:pSvc, gst:gstIn(pSvc, patelEntity), note:pNote });
+  streams.push({ label:'Patel Provision Stores', mrp:pMrp, svc:pSvc, gst:pGst, note:pNote });
 
   // 3) Events — MRP and Service typed per event order
   let eMrp = 0, eSvc = 0, eGst = 0;
