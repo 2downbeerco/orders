@@ -7836,7 +7836,7 @@ function saveRateCardBar(barId) {
 // gross amount to discount from — the invoicer types the final figures directly.
 let invData = {};
 let invWeekOffset = 0;
-let invEntityTab = 'SAGA'; // 'SAGA', 'TWODOWN', 'PERBAR', 'PATEL', or 'EVENTS'
+let invEntityTab = 'SAGA'; // 'SAGA', 'TWODOWN', 'PERBAR', 'PATEL', 'EVENTS' or 'TOTAL'
 let invPerBarExpanded = null;
 let invView = 'week'; // 'week' or 'month' — shared across all tabs
 let invMonthOffset = 0;
@@ -7972,8 +7972,14 @@ function pageInvoicing() {
         onclick="invEntityTab='PATEL';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Patel Provision Stores</button>
       <button class="btn btn-sm ${invEntityTab==='EVENTS'?'btn-primary':'btn-ghost'}"
         onclick="invEntityTab='EVENTS';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Events</button>
+      <button class="btn btn-sm ${invEntityTab==='TOTAL'?'btn-primary':'btn-ghost'}"
+        onclick="invEntityTab='TOTAL';_renderPage()" style="border:none;padding:6px 16px;font-size:13px">Total Revenue</button>
     </div>`;
 
+  // Route to the combined Total Revenue view (Bars + Patel + Events)
+  if (invEntityTab === 'TOTAL') {
+    return renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStart, mEnd, selDate, filteredOrders, weekLabel, monthLabel);
+  }
   // Route to Per-Bar view
   if (invEntityTab === 'PERBAR') {
     return renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, filteredOrders, entityTabBar, viewToggle, periodNav, monthLabel, isCurrentMonth);
@@ -8156,6 +8162,111 @@ function pageInvoicing() {
             <th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+
+// ── Total Revenue (all streams) ───────────────────────────────────────────
+// Adds up the MRP bill and Service bill across Bars (SAGA + Two Down), Patel
+// Provision Stores and Events for the selected week / month, using exactly the
+// same per-order figures as the other Invoicing tabs.
+// GST: a Service bill raised by SAGA is GST-inclusive (18%), so the GST in it is
+// service − service/1.18. Two Down service bills carry no GST in this app.
+// MRP bills never carry GST here.
+function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStart, mEnd, selDate, barOrders, weekLabel, monthLabel) {
+  const fmt2 = n => n.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const SAGA = 'SAGA GYPSY BEER PROJECT';
+  const gstIn = (svc, entity) => entity === SAGA ? svc - svc/1.18 : 0;
+  const inPeriod = o => { const d = new Date(o.deliveryDate); return invView === 'week' ? (d >= wStart && d < wEnd) : (d >= mStart && d < mEnd); };
+  const streams = [];   // { label, mrp, svc, gst, note }
+
+  // 1) Bars — SAGA and Two Down (Patel and Events are already excluded from barOrders)
+  const barStream = { saga:{label:'Bars — SAGA GYPSY', mrp:0, svc:0, gst:0}, td:{label:'Bars — TWO DOWN', mrp:0, svc:0, gst:0} };
+  barOrders.forEach(o => {
+    const b = bars.find(x=>x.id===o.barId)||{};
+    const rc = rateCard[b.id]||{};
+    const entity = orderInvoiceEntity(o, b);
+    const hist = HISTORICAL_INV_DATA[o.id];
+    const inv = invData[o.id]||{};
+    let mrp, svc;
+    if (hist) { mrp = hist.mrpAmount||0; svc = hist.svcAmount||0; }
+    else {
+      const litres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+      mrp = Math.ceil(MRP_PER_LITRE*1.02*litres) - (Number(inv.mrpDiscount)||0);
+      let g = 0;
+      (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) g += (Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
+      svc = parseFloat((g - (Number(inv.svcDiscount)||0)).toFixed(2));
+    }
+    const t = entity === SAGA ? barStream.saga : barStream.td;
+    t.mrp += mrp; t.svc += svc; t.gst += gstIn(svc, entity);
+  });
+  streams.push(barStream.saga, barStream.td);
+
+  // 2) Patel Provision Stores — MRP auto; Service is typed per half-month (month view only)
+  const patelBar = bars.find(b => (b.barName||'').toLowerCase().includes('patel provision')) || {id:-1};
+  const patelEntity = ((rateCard[patelBar.id]||{}).__entity__) || SAGA;
+  let pMrp = 0;
+  [...orders, ...HISTORICAL_ORDERS].filter(o => o.barId === patelBar.id && inPeriod(o)).forEach(o => {
+    const hist = HISTORICAL_INV_DATA[o.id];
+    const litres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+    pMrp += hist ? (hist.mrpAmount||0) : Math.ceil(MRP_PER_LITRE*1.02*litres);
+  });
+  let pSvc = 0, pNote = 'Service is entered per month — shown in Month view only';
+  if (invView === 'month') {
+    const key = `${selDate.getFullYear()}-${String(selDate.getMonth()+1).padStart(2,'0')}`;
+    const sv = patelMonthlyService[key] || {};
+    pSvc = (Number(sv.h1)||0) + (Number(sv.h2)||0);
+    pNote = '';
+  }
+  streams.push({ label:'Patel Provision Stores', mrp:pMrp, svc:pSvc, gst:gstIn(pSvc, patelEntity), note:pNote });
+
+  // 3) Events — MRP and Service typed per event order
+  let eMrp = 0, eSvc = 0, eGst = 0;
+  [...orders, ...HISTORICAL_ORDERS].filter(o => { const b = bars.find(x=>x.id===o.barId); return b && b.isEvent && inPeriod(o); }).forEach(o => {
+    const b = bars.find(x=>x.id===o.barId)||{};
+    const inv = invData[o.id]||{};
+    const m = Number(inv.mrpManual)||0, sv = Number(inv.svcManual)||0;
+    eMrp += m; eSvc += sv; eGst += gstIn(sv, orderInvoiceEntity(o, b));
+  });
+  streams.push({ label:'Events', mrp:eMrp, svc:eSvc, gst:eGst, note:'' });
+
+  const tMrp = streams.reduce((s,x)=>s+x.mrp,0), tSvc = streams.reduce((s,x)=>s+x.svc,0), tGst = streams.reduce((s,x)=>s+x.gst,0);
+  const box = (label, val) => `<div class="card" style="padding:16px;text-align:center">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${label}</div>
+      <div style="font-size:20px;font-weight:700">₹${fmt2(val)}</div></div>`;
+
+  return `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      ${periodNav}
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        ${viewToggle}
+        <span style="font-size:12px;color:var(--muted)">Bars + Patel + Events · SAGA service bills include 18% GST</span>
+      </div>
+    </div>
+    ${entityTabBar}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      ${box('Total MRP Bill', tMrp)}
+      ${box('Total Service Bill', tSvc)}
+      ${box('Total Revenue', tMrp + tSvc)}
+      ${box('Total GST', tGst)}
+    </div>
+    <div class="card" style="padding:0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Stream</th><th style="text-align:right">MRP Bill</th><th style="text-align:right">Service Bill</th><th style="text-align:right">Revenue</th><th style="text-align:right">GST</th></tr></thead>
+          <tbody>${streams.map(x=>`<tr>
+            <td><div style="font-weight:600">${x.label}</div>${x.note?`<div style="font-size:11px;color:var(--muted)">${x.note}</div>`:''}</td>
+            <td style="font-family:monospace;text-align:right">₹${fmt2(x.mrp)}</td>
+            <td style="font-family:monospace;text-align:right">₹${fmt2(x.svc)}</td>
+            <td style="font-family:monospace;text-align:right;font-weight:700">₹${fmt2(x.mrp+x.svc)}</td>
+            <td style="font-family:monospace;text-align:right;color:var(--muted)">₹${fmt2(x.gst)}</td></tr>`).join('')}</tbody>
+          <tfoot><tr style="font-weight:700"><td>Total</td>
+            <td style="font-family:monospace;text-align:right">₹${fmt2(tMrp)}</td>
+            <td style="font-family:monospace;text-align:right">₹${fmt2(tSvc)}</td>
+            <td style="font-family:monospace;text-align:right">₹${fmt2(tMrp+tSvc)}</td>
+            <td style="font-family:monospace;text-align:right">₹${fmt2(tGst)}</td></tr></tfoot>
         </table>
       </div>
     </div>`;
