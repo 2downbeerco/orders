@@ -8527,7 +8527,7 @@ function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entit
       <div style="margin-left:auto">${viewToggle}</div>
     </div>
     ${entityTabBar}
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;max-width:500px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;max-width:700px">
       <div class="card" style="padding:14px;text-align:center">
         <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total MRP</div>
         <div style="font-size:18px;font-weight:700">₹${grandMRP.toLocaleString('en-IN')}</div>
@@ -8535,6 +8535,10 @@ function renderInvPerBar(weekLabel, weekOpts, isCurrentWeek, activeOrders, entit
       <div class="card" style="padding:14px;text-align:center">
         <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total Service</div>
         <div style="font-size:18px;font-weight:700">₹${grandSvc.toLocaleString('en-IN')}</div>
+      </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total Revenue</div>
+        <div style="font-size:18px;font-weight:700">₹${(grandMRP+grandSvc).toLocaleString('en-IN')}</div>
       </div>
     </div>
     ${barCards}`;
