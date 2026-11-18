@@ -8198,6 +8198,8 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
   const gstIn = (svc, entity) => entity === SAGA ? svc - svc/1.18 : 0;
   const inPeriod = o => { const d = new Date(o.deliveryDate); return invView === 'week' ? (d >= wStart && d < wEnd) : invView === 'fy' ? (d >= fStart && d < fEnd) : (d >= mStart && d < mEnd); };
   const streams = [];   // { label, mrp, svc, gst, note }
+  let totLitres = 0;
+  const ordLitres = o => (o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.size)||0),0);
 
   // 1) Bars — SAGA and Two Down (Patel and Events are already excluded from barOrders)
   const barStream = { saga:{label:'Bars — SAGA GYPSY', mrp:0, svc:0, gst:0}, td:{label:'Bars — TWO DOWN', mrp:0, svc:0, gst:0} };
@@ -8216,6 +8218,7 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
       (o.items||[]).forEach(item=>{ const r=(rc[item.beer]||{}); if(r.rate) g += (Number(r.rate)-MRP_PER_LITRE)*item.qty*item.size; });
       svc = parseFloat((g - (Number(inv.svcDiscount)||0)).toFixed(2));
     }
+    totLitres += ordLitres(o);
     const t = entity === SAGA ? barStream.saga : barStream.td;
     t.mrp += mrp; t.svc += svc; t.gst += gstIn(svc, entity);
   });
@@ -8230,6 +8233,7 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
   [...orders, ...HISTORICAL_ORDERS].filter(o => o.barId === patelBar.id && inPeriod(o)).forEach(o => {
     const hist = HISTORICAL_INV_DATA[o.id];
     const litres = (o.items||[]).reduce((s,i)=>s+(i.qty*i.size),0);
+    totLitres += litres;
     pMrp += hist ? (hist.mrpAmount||0) : Math.ceil(MRP_PER_LITRE*1.02*litres);
   });
   let pSvc = 0, pGst = 0, pNote = 'Service is entered per month — shown in Month and FY views only';
@@ -8260,6 +8264,7 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
     const b = bars.find(x=>x.id===o.barId)||{};
     const inv = invData[o.id]||{};
     const m = Number(inv.mrpManual)||0, sv = Number(inv.svcManual)||0;
+    totLitres += ordLitres(o);
     eMrp += m; eSvc += sv; eGst += gstIn(sv, orderInvoiceEntity(o, b));
   });
   streams.push({ label:'Events', mrp:eMrp, svc:eSvc, gst:eGst, note:'' });
@@ -8268,6 +8273,9 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
   const box = (label, val) => `<div class="card" style="padding:16px;text-align:center">
       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${label}</div>
       <div style="font-size:20px;font-weight:700">₹${fmt2(val)}</div></div>`;
+  const litresBox = `<div class="card" style="padding:16px;text-align:center">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Total Litres Shipped</div>
+      <div style="font-size:20px;font-weight:700">${totLitres.toLocaleString('en-IN',{maximumFractionDigits:1})} L</div></div>`;
 
   return `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
@@ -8278,11 +8286,12 @@ function renderInvTotal(entityTabBar, viewToggle, periodNav, wStart, wEnd, mStar
       </div>
     </div>
     ${entityTabBar}
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
       ${box('Total MRP Bill', tMrp)}
       ${box('Total Service Bill', tSvc)}
       ${box('Total Revenue', tMrp + tSvc)}
       ${box('Total GST', tGst)}
+      ${litresBox}
     </div>
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
